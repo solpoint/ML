@@ -1,0 +1,245 @@
+---
+title: "gglot2 for communication (Chapter 22)"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA, fig.width = 10)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Simple plot
+
+```{r}
+mpg_plot <- ggplot(mpg, aes(displ, hwy, colour = class)) +
+  geom_point()
+
+mpg_plot_smooth <- mpg_plot +
+  geom_smooth(aes(colour = NULL), se = FALSE, method = "loess", show.legend = FALSE)
+```
+
+## Title
+
+```{r}
+mpg_plot_smooth + 
+  labs(title = "Fuel efficiency generally decreases with engine size")
+```
+
+## Caption
+
+```{r}
+mpg_plot_smooth + 
+  labs(
+    title = "Fuel efficiency generally decreases with engine size",
+    subtitle = "Two seaters (sports cars) are an exception because of their light weight",
+    caption = "Data from fueleconomy.gov"
+  )
+```
+
+## Axis and legends
+
+```{r}
+mpg_plot_smooth + 
+  labs(
+    x = "Engine displacement (L)",
+    y = "Highway fuel economy (mpg)",
+    colour = "Car type"
+  )
+```
+
+## Mathematical formulae/symbols in labs
+
+```{r}
+mpg_plot_smooth + 
+  labs(
+    x = quote(sum(x[i] ^ 2, i == 1, n)),
+    y = quote(alpha + beta + frac(delta, theta)),
+    colour = "Car type"
+  )
+```
+
+More syntax and symbols are obtained by `?plotmath` (also works in base R plots)
+
+## Annotations
+
+Find the best models in each class in terms of mileage on highway
+```{r}
+best_on_hwy <- mpg %>%
+  group_by(class) %>%
+  top_n(n = 1, wt = hwy)
+```
+
+### Add text
+```{r}
+mpg_plot +
+  geom_text(data = best_on_hwy, aes(label = model))
+```
+
+### Add labels
+```{r}
+mpg_plot + 
+  geom_label(data = best_on_hwy, aes(label = model), nudge_y = 2, alpha = 0.5)
+```
+
+### Add labels and highlight 
+```{r}
+mpg_plot + 
+  geom_point(data = best_on_hwy, size = 3, shape = 1) +
+  ggrepel::geom_label_repel(data = best_on_hwy, aes(label = model))
+```
+
+### More tweaking 
+
+```{r}
+class_avg <- mpg %>%
+  group_by(class) %>%
+  summarise(
+    displ = median(displ),
+    hwy = median(hwy)
+  )
+
+mpg_plot + 
+  ggrepel::geom_label_repel(data = class_avg, aes(label = class),
+                            size = 6, label.size = 0, segment.color = NA) + 
+  geom_point()
+```
+
+```{r}
+label <- mpg %>%
+  summarise(
+    displ = max(displ),
+    hwy = max(hwy),
+    label = "Increasing engine size is \nrelated to decreasing fuel economy."
+  )
+
+mpg_plot +
+  geom_text(data = label, aes(label = label, colour = NULL), 
+            vjust = "top", hjust = "right", show.legend = FALSE)
+```
+
+## Scales
+
+The defaults
+
+```{r}
+mpg_plot + scale_x_continuous() +
+  scale_y_continuous() +
+  scale_colour_discrete()
+```
+
+### Axis ticks and legends
+
+Change breaks
+
+```{r}
+mpg_plot +
+  scale_y_continuous(breaks = seq(15, 40, by = 5))
+```
+
+No tick numbers
+
+```{r}
+mpg_plot +
+  scale_x_continuous(labels = NULL) +
+  scale_y_continuous(labels = NULL)
+```
+
+Position of legend
+
+```{r}
+mpg_plot + 
+  theme(legend.position = "top") ## "top", "bottom", "left", "right" (the default)
+```
+
+```{r}
+mpg_plot_smooth + 
+  theme(legend.position = "bottom") +
+  guides(colour = guide_legend(nrow = 1, override.aes = list(size = 4)))
+```
+
+### Transform scales
+
+```{r}
+ggplot(mpg, aes(displ, log10(hwy), colour = class)) +
+  geom_point()
+
+mpg_plot + scale_y_log10()
+```
+
+### Change colour palette
+
+```{r}
+mpg_plot +
+    scale_colour_brewer(palette = "Set1")
+```
+
+![palettes](brewer-1.png)
+
+### Zooming
+
+```{r}
+mpg_plot +
+  coord_cartesian(xlim = c(5, 7), ylim = c(10, 30))
+
+mpg_plot +
+  coord_cartesian(xlim = c(5, 7), ylim = c(10, 30), expand = FALSE)
+```
+
+### Themes
+
+The `ggthemes` package has a long list of additional themes. I prefer the `theme_bw()` as this is the most
+basic version still including grid lines.
+
+```{r}
+mpg_plot + 
+  theme_classic()
+
+mpg_plot + 
+  theme_dark()
+
+mpg_plot + 
+  theme_gray()
+
+mpg_plot + 
+  theme_minimal()
+
+mpg_plot + 
+  theme_linedraw()
+
+mpg_plot + 
+  theme_void()
+
+
+```
+
+### Saving your files
+
+```{r}
+ggsave("my-plot.pdf", mpg_plot)
+
+pdf("my_plot.pdf", height = 6, width = 4.5)
+mpg_plot
+dev.off()
+
+## Alternatives: png, postscript, ...
+```
+
+### Autoplot
+
+ggplot2 has a function `autoplot` which tries to infer the appropriate plot for different
+classes of objects. The `ggfortify` extends this functionality.
+
+### Sources of info
+
+* http://www.cookbook-r.com/Graphs/
+* https://link-springer-com.zorac.aub.aau.dk/book/10.1007/978-3-319-24277-4 (free using your AAU login)
+* http://www.ggplot2-exts.org/gallery
+
+

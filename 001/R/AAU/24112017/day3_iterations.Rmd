@@ -1,0 +1,159 @@
+---
+title: "Iterations (Chapter 17 - former part)"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Simple iterations
+
+## For loops
+
+```{r}
+df <- tibble(
+  a = rnorm(10),
+  b = rnorm(10),
+  c = rnorm(10),
+  d = rnorm(10)
+)
+```
+
+Where we wants to call the `summary` function on each column.
+
+```{r}
+summary(df$a)
+summary(df$b)
+summary(df$c)
+summary(df$d)
+```
+
+However, there is (several!) a more efficient way
+
+```{r}
+output <- vector(length = ncol(df), mode = "list")
+for (i in seq_along(df)) {
+  output[[i]] <- summary(df[[i]])
+}
+```
+
+And the `output` holds the results:
+```{r, echo=FALSE}
+output
+```
+
+For these simple `for` loops, R is running though an object of indicies, `X`, by the construction `for(i in X)`.
+The use of `seq_along` ensures that border cases of `X` being `NULL` (or empty) we obtain `integer(0)`, 
+whereas the simpler `1:length(X)` would fail in such an instance.
+```{r}
+y <- vector("double", 0)
+seq_along(y)
+1:length(y)
+```
+
+### Exercises
+
+1, 2, 4
+
+## More on for loops
+
+We can also modify the elements in a `data.frame` or `tibble`
+```{r}
+center_std <- function(x) (x-mean(x))/sd(x)
+
+x <- 1:10
+mean(x) 
+sd(x)
+mean(center_std(x))
+sd(center_std(x))
+```
+
+For the columns in the `df` we can center and standardise by 
+```{r}
+df_ <- df
+for (i in seq_along(df_)) {
+  df_[[i]] <- center_std(df_[[i]])
+}
+df_
+```
+
+We may also loop over names
+```{r}
+df_n <- df
+for (i in names(df_n)) {
+  df_n[[i]] <- center_std(df_n[[i]])
+}
+df_n
+```
+
+### The flexibility of lists
+
+The book's example on using lists for temporal storage of results is relevant enough to go through.
+```{r}
+means <- c(0, 1, 2)                          ## 3 different mean values
+
+output <- double()                           ## The output container
+for (i in seq_along(means)) {                ## loop over the 'means' vector
+  n <- sample(100, 1)                        ## randomly 'sample' 1 number between 1 and 100
+  output <- c(output, rnorm(n, means[[i]]))  ## concatenate the result to the output
+}
+str(output)                                  ## class of output
+```
+
+Here we dynamically allocates memory for `output` - this is expensive and should be avoided.
+
+Using lists, we let R handle this allocation *per* constructed list element (this is cheaper)
+```{r}
+out <- vector("list", length(means))
+for (i in seq_along(means)) {
+  n <- sample(100, 1)
+  out[[i]] <- rnorm(n, means[[i]])
+}
+str(out)
+str(unlist(out))
+```
+
+### Exericses
+
+1, 2, 3, (4)
+
+## Functionals
+
+In order for us to compute the `mean` of each column in a `data.frame` we can use the `for` loop constructions above. However, it is much better to write a function that takes care of all the bookkeeping once.
+
+```{r}
+col_mean <- function(df, ...) { ## The ... allows us to pass additional arguments to inner functions
+  output <- rep.int(NA, ncol(df))
+  for (i in seq_along(df)) output[i] <- mean(df[[i]], ...) ## eg. trim or na.rm
+  output
+}
+
+col_mean(df)
+df$b[4] <- NA
+col_mean(df, na.rm = TRUE)
+```
+
+We can however, make us of an even more flexible contruction, where the `mean` can be replaced by other functions.
+
+```{r}
+col_fun <- function(df, fun, ...) {
+  out <- replicate(ncol(df), NULL) 
+  for (i in seq_along(df)) out[[i]] <- fun(df[[i]], ...)
+  out
+}
+
+col_fun(df, summary)
+col_fun(df, median, na.rm = TRUE)
+```
+
+### Exercise
+1, 2

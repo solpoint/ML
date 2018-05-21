@@ -1,0 +1,87 @@
+---
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+pass = .rs.askForPassword("")
+my_db <- src_postgres(host = 'localhost', 
+                      dbname = 'nycflights13', 
+                      user = 'tior', 
+                      password = pass)
+src_tbls(my_db)
+
+tbl(my_db, sql("SELECT * FROM flights"))
+
+flights <- tbl(my_db, "flights")
+flights
+
+airports <- tbl(my_db, "airports")
+airports
+
+collect(airports)
+```
+
+
+```{r}
+flights %>% 
+  group_by(dest) %>% 
+  summarise(n = n())
+
+flights %>% 
+  left_join(airports, by = c("dest" = "faa")) %>% 
+  group_by(dest) %>% 
+  summarise(name = name[1], n = n())
+
+flights %>% 
+  left_join(airports, by = c("dest" = "faa")) %>% 
+  group_by(dest, name) %>% 
+  summarise(n = n())
+
+flights %>% 
+  group_by(dest) %>% 
+  summarise(n = n()) %>% 
+  left_join(airports %>% select(faa, name), by = c("dest" = "faa")) %>% 
+  select(dest, name, n)
+
+join_summarise = function() {
+  flights %>% 
+    left_join(airports, by = c("dest" = "faa")) %>% 
+    group_by(dest, name) %>% 
+    summarise(n = n()) %>% 
+    collect()
+}
+
+summarise_join = function() {
+  flights %>% 
+    group_by(dest) %>% 
+    summarise(n = n()) %>% 
+    left_join(airports, by = c("dest" = "faa")) %>% 
+    select(dest, name, n) %>% 
+    collect()
+}
+
+library(microbenchmark)
+microbenchmark(join_summarise(), summarise_join(), times = 10)
+
+pass = .rs.askForPassword("")
+my_db <- src_postgres(host = 'test-db01.math.aau.dk', 
+                      dbname = 'demodb', 
+                      user = 'demouser', 
+                      password = pass)
+src_tbls(my_db)
+
+tbl(my_db, sql("SELECT * FROM flights"))
+
+flights <- tbl(my_db, "flights")
+flights
+
+airports <- tbl(my_db, "airports")
+airports
+
+microbenchmark(join_summarise(), summarise_join(), times = 10)
+```
+

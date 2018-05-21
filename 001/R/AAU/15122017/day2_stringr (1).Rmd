@@ -1,0 +1,452 @@
+---
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(stringr)
+```
+
+```{r}
+string1 <- "This is a string"
+string2 <- 'If I want to include a "quote" inside a string, I use single quotes'
+```
+
+```
+> "This is a string without a closing quote
++ 
++ 
++ HELP I'M STUCK
+```
+ESC!
+
+
+```{r}
+x = c("one", "two", "three")
+x
+writeLines(x)
+```
+
+```{r}
+str_length(c("a", "R for data science", NA))
+```
+
+
+```{r}
+str_c("x", "y")
+str_c("x", "y", "z")
+str_c("x", "y", sep = ", ")
+```
+
+```{r}
+x <- c("abc", NA)
+str_c("|-", x, "-|")
+str_c("|-", str_replace_na(x), "-|")
+str_c("|-", str_replace_na(x, replacement = '???'), "-|")
+```
+
+```{r}
+str_c("prefix-", c("a", "b", "c"), "-suffix")
+
+str_c(c("x", "y", "z"))
+str_c(c("x", "y", "z"), collapse = ", ")
+```
+
+
+# Subsetting
+
+```{r}
+x <- c("Apple", "Banana", "Pear")
+str_sub(x, 1, 3)
+
+str_sub("a", 1, 5)
+```
+
+
+# Locales
+
+Be aware. Check <http://r4ds.had.co.nz/strings.html> and other online ressources.
+
+```{r}
+str_to_upper(c("i", "ı"))
+str_to_upper(c("i", "ı"), locale = "tr")
+iconv(c("i", "ı"), to = "ascii", sub = "")
+```
+
+# Exercise
+
+Use `str_length()` and `str_sub()` to extract the middle character from a string. What will you do if the string has an even number of characters?
+
+# Regular expressions
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "an")
+```
+
+```{r}
+# . matches any character (except a newline)
+# metacharacter
+str_view(x, ".a.")
+str_view(x, ".e.")
+```
+
+ICU regex engine
+Quite similar to Perl's regexes
+<http://userguide.icu-project.org/strings/regexp>
+
+`\` is used as an escape character 
+
+```{r, error=TRUE}
+cat("x\ny")
+cat("x\.y")
+str_view(c("abc", "a.c", "bef"), "a\.c")
+str_view(c("abc", "a.c", "bef"), "a\\.c")
+
+x <- "a\\b"
+writeLines(x)
+str_view(x, "\\\\")
+```
+
+
+## Anchors
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "^a")
+str_view(x, "a$")
+```
+
+Evan Misshula: 
+"If you begin with power (^), you end up with money ($)."
+
+```{r}
+x <- c("apple pie", "apple", "apple cake")
+str_view(x, "apple")
+str_view(x, "^apple$")
+```
+
+### Exercises
+
+R4DS (online): 14.3.2.1 Exercises [= Exercises on p. 203 in R4DS book].
+
+
+## Character classes and alternatives
+
+* `\d`: matches any digit.
+* `\s`: matches any whitespace (e.g. space, tab, newline).
+* `[abc]`: matches a, b, or c.
+* `[^abc]`: matches anything except a, b, or c.
+
+Remember to escape the `\` for the string; type `"\\d"` or `"\\s"`
+
+```{r}
+x <- c("apple pie", "apple", "apple cake")
+str_view(x, "\\s")
+str_view(x, "[ae]\\s")
+```
+
+Alternation:
+
+```{r}
+str_view(c("abc", "deaf", "apple"), "abc|d..f")
+str_view(c("abc", "deaf", "apple"), "(abc)|(d..f)")
+```
+
+```{r}
+str_view(c("abc", "xyz", "abcyz", "abxyz."), "abc|xyz")
+str_view(c("abc", "xyz", "abcyz", "abxyz."), "ab(c|x)yz")
+str_view(c("abc", "xyz", "abcyz", "abxyz."), "ab[cx]yz")
+```
+
+
+### Exercises
+
+R4DS (online): 14.3.3.1 Exercises (use `stringr::words`) [= Exercises on p. 204 in R4DS book].
+
+
+## Repetition
+
+* `?`: 0 or 1
+* `+`: 1 or more
+* `*`: 0 or more
+
+```{r}
+x <- "1888 is the longest year in Roman numerals: MDCCCLXXXVIII"
+str_view(x, "CC?")
+str_view(x, "CC+")
+str_view(x, 'C[LX]+')
+```
+
+Note that the precedence of these operators is high, so you can write: colou?r to match either American or British spellings. 
+
+```{r}
+str_view(c('color', 'colour'), 'colou?r')
+```
+
+* `{n}`: exactly $n$
+* `{n,}`: $n$ or more
+* `{,m}`: at most $m$
+* `{n,m}`: between $n$ and $m$ (both included)
+
+```{r}
+str_view(x, "C{2}")
+str_view(x, "C{2,}")
+str_view(x, "CC+")
+```
+
+```{r}
+str_view(c('summarize', 'summarise'), 'summari[sz]e')
+str_view(c('summarize', 'summarise'), 'summari[sz]{1}e')
+str_view(c('summarize', 'summarise'), 'summari(s|z)e')
+```
+
+
+```{r}
+str_view(x, "C{2,3}") # greedy
+str_view(x, 'C{2,3}?') # generous / lazy
+
+str_view(x, 'C[LX]+') # greedy
+str_view(x, 'C[LX]+?') # generous / lazy
+```
+
+
+### Exercises
+
+R4DS (online): 14.3.4.1 Exercises (use `stringr::words`) [= Exercises on p. 206 in R4DS book].
+
+
+## Grouping
+
+`(` makes expressions easier to read, but also introduces groups:
+
+```{r}
+fruit
+str_view(fruit, "(..)\\1", match = TRUE)
+str_view(fruit, "(.)(.)\\2\\1", match = TRUE)
+```
+
+
+# Using regular expressions
+
+Jamie Zawinski (jwz / Mozilla a.o.):
+
+> Some people, when confronted with a problem, think "I know, I'll use regular expressions." Now they have two problems.
+
+As a cautionary tale, check out this regular expression that checks if a email address is valid:
+
+<https://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address/201378#201378>:
+
+```
+(?:(?:\r\n)?[ \t])*(?:(?:(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t]
+)+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:
+\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(
+?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ 
+\t]))*"(?:(?:\r\n)?[ \t])*))*@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\0
+31]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\
+](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+
+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:
+(?:\r\n)?[ \t])*))*|(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z
+|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)
+?[ \t])*)*\<(?:(?:\r\n)?[ \t])*(?:@(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\
+r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[
+ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)
+?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t]
+)*))*(?:,@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[
+ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*
+)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t]
+)+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*)
+*:(?:(?:\r\n)?[ \t])*)?(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+
+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r
+\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:
+\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t
+]))*"(?:(?:\r\n)?[ \t])*))*@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031
+]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](
+?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?
+:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?
+:\r\n)?[ \t])*))*\>(?:(?:\r\n)?[ \t])*)|(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?
+:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?
+[ \t]))*"(?:(?:\r\n)?[ \t])*)*:(?:(?:\r\n)?[ \t])*(?:(?:(?:[^()<>@,;:\\".\[\] 
+\000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|
+\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>
+@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"
+(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*))*@(?:(?:\r\n)?[ \t]
+)*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\
+".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?
+:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[
+\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*|(?:[^()<>@,;:\\".\[\] \000-
+\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(
+?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)*\<(?:(?:\r\n)?[ \t])*(?:@(?:[^()<>@,;
+:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([
+^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\"
+.\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\
+]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*(?:,@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\
+[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\
+r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] 
+\000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]
+|\\.)*\](?:(?:\r\n)?[ \t])*))*)*:(?:(?:\r\n)?[ \t])*)?(?:[^()<>@,;:\\".\[\] \0
+00-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\
+.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,
+;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|"(?
+:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*))*@(?:(?:\r\n)?[ \t])*
+(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".
+\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t])*(?:[
+^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\]
+]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*\>(?:(?:\r\n)?[ \t])*)(?:,\s*(
+?:(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\
+".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)(?:\.(?:(
+?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[
+\["()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t
+])*))*@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t
+])+|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?
+:\.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|
+\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*|(?:
+[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".\[\
+]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)*\<(?:(?:\r\n)
+?[ \t])*(?:@(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["
+()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)
+?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>
+@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*(?:,@(?:(?:\r\n)?[
+ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,
+;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\.(?:(?:\r\n)?[ \t]
+)*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\
+".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*)*:(?:(?:\r\n)?[ \t])*)?
+(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\["()<>@,;:\\".
+\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])*)(?:\.(?:(?:
+\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z|(?=[\[
+"()<>@,;:\\".\[\]]))|"(?:[^\"\r\\]|\\.|(?:(?:\r\n)?[ \t]))*"(?:(?:\r\n)?[ \t])
+*))*@(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])
++|\Z|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*)(?:\
+.(?:(?:\r\n)?[ \t])*(?:[^()<>@,;:\\".\[\] \000-\031]+(?:(?:(?:\r\n)?[ \t])+|\Z
+|(?=[\["()<>@,;:\\".\[\]]))|\[([^\[\]\r\\]|\\.)*\](?:(?:\r\n)?[ \t])*))*\>(?:(
+?:\r\n)?[ \t])*))*)?;\s*)
+```
+
+
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "e")
+str_detect(x, "e")
+```
+
+```{r}
+str_view(words, "^t", match = TRUE)
+sum(str_detect(words, "^t"))
+
+# Proportion of common words that end with a vowel
+mean(str_detect(words, "[aeiou]$"))
+```
+
+```{r}
+# Find all words containing at least one vowel, and negate
+no_vowels_1 <- !str_detect(words, "[aeiou]")
+
+# Find all words consisting only of consonants (non-vowels)
+no_vowels_2 <- str_detect(words, "^[^aeiou]+$")
+
+identical(no_vowels_1, no_vowels_2)
+
+mean(no_vowels_1)
+sum(no_vowels_1)
+words[no_vowels_1]
+```
+
+Also split into multiple and expliot boolean logic:
+
+```{r}
+c(TRUE, FALSE) & c(TRUE, TRUE)
+c(TRUE, FALSE) & c(TRUE, FALSE)
+c(TRUE, FALSE) & c(FALSE, FALSE)
+
+c(TRUE, FALSE) | c(TRUE, TRUE)
+c(TRUE, FALSE) | c(FALSE, FALSE)
+```
+
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_count(x, "a")
+```
+
+
+```{r}
+words[str_detect(words, "x$")]
+str_subset(words, "x$")
+```
+
+
+```{r}
+df <- tibble(
+  word = words, 
+  i = seq_along(word)
+)
+df %>% 
+  filter(str_detect(word, "x$"))
+```
+
+```{r}
+df %>% 
+  mutate(
+    vowels = str_count(word, "[aeiou]"),
+    consonants = str_count(word, "[^aeiou]")
+  )
+```
+
+
+```{r}
+length(sentences)
+head(sentences)
+
+colours <- c("red", "orange", "yellow", "green", "blue", "purple")
+colour_match <- str_c(colours, collapse = "|")
+colour_match
+
+
+str_extract(c("apple", "banana", "pear"), "app.e")
+
+has_colour <- str_subset(sentences, colour_match)
+has_colour
+matches <- str_extract(has_colour, colour_match)
+head(matches)
+
+
+more <- sentences[str_count(sentences, colour_match) > 1]
+more
+str_extract_all(more, colour_match)
+```
+
+
+```{r}
+str_extract(c("apple", "banana", "pear"), "ap(p.e)")
+str_match(c("apple", "banana", "pear"), "ap(p.e)")
+str_match_all(c("apple", "banana", "pear"), "(p)")
+```
+
+
+# Replacing
+
+```{r}
+x <- c("apple", "pear", "banana")
+str_replace(x, "[aeiou]", "-")
+str_replace_all(x, "[aeiou]", "-")
+
+x <- c("1 house", "2 cars", "3 people")
+str_replace_all(x, c("1" = "one", "2" = "two", "3" = "three"))
+
+str_replace_all(x, c("1" = "one", "2" = "two", "3" = "three", " " = "_"))
+str_replace_all(x, c(" " = " x ", "s$" = ""))
+```
+
+
+
+```{r}
+str_count("aaaaaa", "a*")
+str_match_all("aaaaaa", "a*")
+```
+
+
+# More ressources
+
+R4DS.
+

@@ -1,0 +1,606 @@
+---
+output: html_document
+---
+
+# Vectors
+
+## Introduction
+
+* tibbles and packages that work with them
+* More programming (own functions), dig deeper into R: vectors
+
+### Prerequisites
+
+Use functions from the __purrr__ package to avoid some inconsistencies in base R.
+
+```{r setup, message = FALSE}
+library(tidyverse)
+```
+
+## Vector basics
+
+There are two types of vectors:
+
+1. __Atomic__ vectors, of which there are six types:
+  __logical__, __integer__, __double__,  __character__, __complex__, and 
+  __raw__. Integer and double vectors are collectively known as
+  __numeric__ vectors. 
+
+1. __Lists__,  which are sometimes called recursive vectors because lists can 
+  contain other lists. 
+
+Differences between atomic vectors and lists: 
+
+* Main: atomic vectors are __homogeneous__, while lists can be __heterogeneous__. 
+* `NULL`
+
+```{r}
+c(NULL)
+c(10, NULL, 23)
+
+list(10, NULL, 23)
+
+length(NULL)
+length(c(NULL))
+length(c(10, NULL, 23))
+length(list(10, NULL, 23))
+```
+
+Every vector has two key properties: 
+
+1.  Its __type__, which you can determine with `typeof()`.
+
+```{r}
+letters
+typeof(letters)
+typeof(1:10)
+str(1:10)
+```
+
+2. Its __length__, which you can determine with `length()`.
+
+```{r}
+x <- list("a", "b", 1:10)
+length(x)
+```
+
+Additional metadata: attributes. Gives __augmented vectors__ which build on additional behaviour. There are four important types of augmented vector:
+
+* Factors are built on top of integer vectors.
+* Dates and date-times are built on top of numeric vectors.
+* Data frames and tibbles are built on top of lists.
+
+This chapter will introduce you to these important vectors from simplest to most complicated.
+
+## Important types of atomic vector
+
+Focus on: logical, integer, double, and character.
+Rarely used in data analysis: raw and complex.
+
+### Logical
+
+Values: `FALSE`, `TRUE`, and `NA`.
+
+```{r}
+1:10 %% 3 == 0
+str(1:10 %% 3 == 0)
+
+c(TRUE, TRUE, FALSE, NA)
+```
+
+### Numeric
+
+Integer and double vectors are collectively: numeric vectors. 
+In R, numbers are doubles by default. To make an integer, place an `L` after the number:
+
+```{r}
+typeof(1)
+typeof(1L)
+1.5L
+
+typeof(1)
+typeof(1:10)
+typeof(c(1))
+
+# Fun
+1:1
+typeof(1:1)
+typeof(seq(1, 1))
+seq(1, 1)
+```
+
+Distinction usually not important, but:
+
+1. Doubles are approximations. 
+
+```{r}
+x <- sqrt(2)^2
+x
+x - 2
+2 == sqrt(2)^2
+identical(2, sqrt(2)^2)
+all.equal(2, sqrt(2)^2)
+dplyr::near(2, sqrt(2)^2)
+dplyr::near
+all.equal
+lookup::lookup('all.equal')
+lookup::lookup('all.equal.numeric')
+```
+
+2. Integers have one special value: `NA`. Doubles have four: `NA`, `NaN`, `Inf` and `-Inf`.
+
+NA: Not available / missing (watch out dealing with abbreviations: North America, Namibia, Sodium, ...)
+NaN: Not a number / not defined
+
+All three special values `NaN`, `Inf` and `-Inf` can arise during division:
+
+```{r}
+c(-1, 0, 1) / 0
+```
+
+Use `is.finite()`, `is.infinite()`, and `is.nan()`:
+    
+    |                  |  0  | Inf | NA  | NaN |
+    |------------------|-----|-----|-----|-----|
+    | `is.finite()`    |  x  |     |     |     |
+    | `is.infinite()`  |     |  x  |     |     |
+    | `is.na()`        |     |     |  x  |  x  |
+    | `is.nan()`       |     |     |     |  x  |
+
+### Character
+
+
+Character vectors: complex as each element of a character vector is a string, and a string can contain an arbitrary amount of data. 
+
+stringr
+
+R uses a global string pool (hash table): Each unique string is only stored in memory once, and every use of the string points to that representation:
+
+```{r}
+x <- "This is a reasonably long string."
+pryr::object_size(x)
+
+y <- rep(x, 1000)
+
+1000*pryr::object_size(x)
+pryr::object_size(y)
+```
+
+`y` doesn't take up 1,000x as much memory as `x`, because each element of `y` is just a pointer to that same string. A pointer is 8 bytes, so 1000 pointers to a 136 B string is 8 * 1000 + 136 = 8.13 kB.
+
+### Missing values
+
+Note that each type of atomic vector has its own missing value:
+
+```{r}
+NA            # logical
+str(NA)
+NA_integer_   # integer
+NA_real_      # double
+NA_character_ # character
+```
+
+Normally does not matter. But: type stability (__purrr__)
+
+## Using atomic vectors
+
+1.  How to convert from one type to another, and when that happens
+    automatically.
+2.  How to tell if an object is a specific type of vector.
+3.  What happens when you work with vectors of different lengths.
+4.  How to name the elements of a vector.
+5.  How to pull out elements of interest.
+
+### Coercion
+
+There are two ways to convert, or coerce, one type of vector to another:
+
+1.  Explicit coercion: `as.logical()`, `as.integer()`, `as.double()`, or `as.character()`. 
+2.  Implicit coercion: when vector used in a specific context
+    
+Implicit coercion:
+
+```{r}
+x <- sample(20, 100, replace = TRUE)
+typeof(x)
+y <- x > 10
+typeof(y)
+sum(y)  # how many are greater than 10?
+mean(y) # what proportion are greater than 10?
+```
+
+Implicit coercion in opposite direction (from integer to logical):
+
+```{r, eval = FALSE}
+if (length(x)) {
+  # do something
+}
+```
+
+Do not do this! Difficult to read. Instead be explicit: `length(x) > 0`.
+
+What happens when creating a vector containing multiple types with `c()`: the most complex type always wins.
+
+```{r}
+typeof(c(TRUE, 1L))
+typeof(c(1L, 1.5))
+typeof(c(1.5, "a"))
+c(1.5, "a")
+```
+
+...and it does so silently!
+
+Multiple types in the same vector: use a list.
+
+### Test functions
+
+* `typeof()`: character.
+* Want `TRUE` or `FALSE`. 
+* Base R provides many functions like `is.vector()` and `is.atomic()`, but they often returns surprising results.
+* Use `is_*` functions from __purrr__ summarised:
+
+|                  | lgl | int | dbl | chr | list |
+|------------------|-----|-----|-----|-----|------|
+| `is_logical()`   |  x  |     |     |     |      |
+| `is_integer()`   |     |  x  |     |     |      |
+| `is_double()`    |     |     |  x  |     |      |
+| `is_numeric()`   |     |  x  |  x  |     |      |
+| `is_character()` |     |     |     |  x  |      |
+| `is_atomic()`    |  x  |  x  |  x  |  x  |      |
+| `is_list()`      |     |     |     |     |  x   |
+| `is_vector()`    |  x  |  x  |  x  |  x  |  x   |
+
+Each predicate also comes with a "scalar" version, like `is_scalar_atomic()`, which checks that the length is 1. This is useful, for example, if you want to check that an argument to your function is a single logical value.
+
+### Scalars and recycling rules
+
+* Implicitly coercing type
+* Implicitly coerce the length of vectors; called vector __recycling__
+
+```{r}
+sample(10) + 100
+runif(10) > 0.5
+
+1:10 + 1:2
+1:10 + 1:3
+```
+
+Vector recycling: can be used to create very succinct, clever code, it can also silently conceal problems.
+
+Vectorised functions in __tidyverse__ will throw errors when you recycle anything other than a scalar. Use explicit recycling with `rep()`:
+
+```{r, error = TRUE}
+tibble(x = 1:4, y = 1:2)
+tibble(x = 1:4, y = rep(1:2, 2))
+tibble(x = 1:4, y = rep(1:2, each = 2))
+```
+
+### Naming vectors
+
+```{r}
+v = c(x = 1, y = 2, z = 4)
+v
+str(v)
+```
+
+Or after the fact with `purrr::set_names()`:
+
+```{r}
+set_names(1:3, c("a", "b", "c"))
+```
+
+
+### Subsetting
+
+* `dplyr::filter()`: filter rows in a tibble
+* `filter()` only works with tibble, so we'll need new tool for vectors: `[`. 
+* `[` is the subsetting function, and is called like `x[a]`. 
+
+Four types of things that you can subset a vector with:
+
+1.  A numeric vector containing only integers. The integers must either be all 
+    positive, all negative, or zero.
+    
+    Subsetting with positive integers keeps the elements at those positions:
+    
+    ```{r}
+    x <- c("one", "two", "three", "four", "five")
+    x[c(3, 2, 5)]
+    ```
+    
+    By repeating a position, you can actually make a longer output than 
+    input:
+    
+    ```{r}
+    x[c(1, 1, 5, 5, 5, 2)]
+    ```
+    
+    Negative values drop the elements at the specified positions:
+    
+    ```{r}
+    x[c(-1, -3, -5)]
+    -c(1, 3, 5)
+    x[-c(1, 3, 5)]
+    ```
+    
+    It's an error to mix positive and negative values:
+    
+    ```{r, error = TRUE}
+    x[c(1, -1)]
+    ```
+
+    The error message mentions subsetting with zero, which returns no values:
+    
+    ```{r}
+    x[0]
+    ```
+    
+    This is not useful very often, but it can be helpful if you want to create 
+    unusual data structures to test your functions with.
+  
+2.  Subsetting with a logical vector keeps all values corresponding to a
+    `TRUE` value. This is most often useful in conjunction with the 
+    comparison functions.
+    
+    ```{r}
+    x <- c(10, 3, NA, 5, 8, 1, NA)
+    
+    # All non-missing values of x
+    x[!is.na(x)]
+    
+    # All even (or missing!) values of x
+    x[x %% 2 == 0]
+    ```
+
+3.  If you have a named vector, you can subset it with a character vector:
+    
+    ```{r}
+    x <- c(abc = 1, def = 2, xyz = 5)
+    x[c("xyz", "def")]
+    ```
+    
+    Like with positive integers, you can also use a character vector to 
+    duplicate individual entries.
+
+4.  The simplest type of subsetting is nothing, `x[]`.
+    Not really useful for subsetting vectors.
+    Subsetting matrices (or arrays), e.g if `x` is 2d, `x[1, ]` selects the first row and 
+    all the columns, and `x[, -1]` selects all rows and all columns except
+    the first. Note `x[1, ]` vs `x[1, , drop = FALSE]`
+    
+```{r}
+(1:10)[]
+
+x = matrix(1:4, 2, 2)
+x
+x[1, ]
+x[1, , drop = FALSE]
+dim(x)
+dim(x[1, ])
+dim(x[1, , drop = FALSE])
+```
+
+
+Variation of `[`: `[[`:
+
+* `[[` only ever extracts a single element, and always drops names.
+* Whenever you want to make it clear that you're extracting a single item, as in a for loop. 
+* The distinction between `[` and `[[` is most important for lists, as we'll see shortly.
+
+## Recursive vectors (lists) {#lists}
+
+Lists are a step up in complexity from atomic vectors, because lists can contain other lists. This makes them suitable for representing hierarchical or tree-like structures. You create a list with `list()`:
+
+```{r}
+x <- list(1, 2, 3)
+x
+```
+
+A very useful tool for working with lists is `str()` because it focusses on the **str**ucture, not the contents.
+
+```{r}
+str(x)
+
+x_named <- list(a = 1, b = 2, c = 3)
+str(x_named)
+```
+
+Unlike atomic vectors, `list()` can contain a mix of objects:
+
+```{r}
+y <- list("a", 1L, 1.5, TRUE)
+str(y)
+```
+
+Lists can even contain other lists!
+
+```{r}
+z <- list(list(1, 2), list(3, 4))
+str(z)
+str(z, 1)
+```
+
+### Visualising lists
+
+To explain more complicated list manipulation functions, it's helpful to have a visual representation of lists. For example, take these three lists:
+
+```{r}
+x1 <- list(c(1, 2), c(3, 4))
+x2 <- list(list(1, 2), list(3, 4))
+x3 <- list(1, list(2, list(3)))
+
+str(x1)
+str(x2)
+str(x3)
+
+str(x3, 1)
+```
+
+### Subsetting
+
+There are three ways to subset a list, which I'll illustrate with a list named `a`:
+
+```{r}
+a <- list(a = 1:3, b = "a string", c = pi, d = list(-1, -5))
+```
+
+*   `[` extracts a sub-list. The result will always be a list.
+
+    ```{r}
+    str(a[1:2])
+    str(a[4])
+    ```
+    
+    Like with vectors, you can subset with a logical, integer, or character
+    vector.
+    
+*   `[[` extracts a single component from a list. It removes a level of 
+    hierarchy from the list.
+
+    ```{r}
+    a
+    str(a)
+    str(a[[1]])
+    str(a[1])
+    str(a[[4]])
+    ```
+
+*   `$` is a shorthand for extracting named elements of a list. It works
+    similarly to `[[` except that you don't need to use quotes.
+    
+    ```{r}
+    a$a
+    a[["a"]]
+    ```
+
+The distinction between `[` and `[[` is really important for lists, because `[[` drills down into the list while `[` returns a new, smaller list.
+
+## Attributes
+
+Any vector can contain arbitrary additional metadata through its __attributes__. You can think of attributes as named list of vectors that can be attached to any object. 
+You can get and set individual attribute values with `attr()` or see them all at once with `attributes()`.
+
+```{r}
+x <- 1:10
+attr(x, "greeting")
+attr(x, "greeting") <- "Hi!"
+x
+attr(x, "farewell") <- "Bye!"
+attributes(x)
+x
+```
+
+There are three very important attributes that are used to implement fundamental parts of R:
+
+1. __Names__ are used to name the elements of a vector.
+1. __Dimensions__ (dims, for short) make a vector behave like a matrix or array.
+1. __Class__ is used to implement the S3 object oriented system.
+
+* Names above
+* Dimensions (`matrix` / `array`)
+* Class: controls how __generic functions__ work
+
+Generic functions are key to object oriented programming in R-
+Dynamic dispatch.
+
+Details of object oriented programming in _Advanced R_ at <http://adv-r.had.co.nz/OO-essentials.html#s3>.
+
+Here's what a typical generic function looks like:
+
+```{r}
+as.Date
+methods("as.Date")
+```
+
+For example, if `x` is a character vector, `as.Date()` will call `as.Date.character()`; if it's a factor, it'll call `as.Date.factor()`.
+
+You can see the specific implementation of a method with `getS3method()`:
+
+```{r}
+getS3method("as.Date", "default")
+getS3method("as.Date", "numeric")
+```
+
+The most important S3 generic is `print()`: it controls how the object is printed when you type its name at the console.
+
+```{r}
+methods("print")
+```
+
+Other important generics are the subsetting functions `[`, `[[`, and `$`. 
+
+## Augmented vectors
+
+Vectors with additional __attributes__, including class:
+
+* Factors
+* Dates 
+* Date-times
+* Tibbles
+
+These are described below.
+
+### Factors
+
+Represent categorical data; built on top of integers, and have a levels attribute:
+
+```{r}
+x <- factor(c("ab", "cd", "ab"), levels = c("ab", "cd", "ef"))
+typeof(x)
+attributes(x)
+```
+
+### Dates and date-times
+
+Dates in R are numeric vectors that represent the number of days since 1 January 1970.
+
+```{r}
+x <- as.Date("1971-01-01")
+unclass(x)
+
+typeof(x)
+attributes(x)
+```
+
+Date-times are numeric vectors with class `POSIXct` that represent the number of seconds since 1 January 1970. (In case you were wondering, "POSIXct" stands for "Portable Operating System Interface", calendar time.)
+
+```{r}
+x <- lubridate::ymd_hm("1970-01-01 01:00")
+unclass(x)
+
+typeof(x)
+attributes(x)
+```
+
+The `tzone` attribute is optional. It controls how the time is printed, not what absolute time it refers to.
+
+```{r}
+attr(x, "tzone") <- "US/Pacific"
+x
+
+attr(x, "tzone") <- "US/Eastern"
+x
+```
+
+### Tibbles
+
+Tibbles are augmented lists: they have class "tbl_df" + "tbl" + "data.frame", and `names` (column) and `row.names` attributes:
+
+```{r}
+tb <- tibble::tibble(x = 1:5, y = 5:1)
+typeof(tb)
+attributes(tb)
+```
+
+The difference between a tibble and a list is that all the elements of a data frame must be vectors with the same length. All functions that work with tibbles enforce this constraint.
+
+Traditional data.frames have a very similar structure:
+
+```{r}
+df <- data.frame(x = 1:5, y = 5:1)
+typeof(df)
+attributes(df)
+```
+
+The main difference is the class. The class of tibble includes "data.frame" which means tibbles inherit the regular data frame behaviour by default.
+

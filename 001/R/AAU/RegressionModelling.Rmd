@@ -1,0 +1,67 @@
+---
+title: "RegressionModelling"
+author: "Sospeter A. Oluoch"
+date: "10 jan 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(nycflights13)
+library(dplyr)
+library(lubridate)
+```
+
+## R Markdown
+This is a correction on the Miniproject 1 at AAU
+
+
+## Exercise
+
+Investigate if departure delay is associated with weather conditions at the origin airport. This includes descriptives (mean departure delay), plotting, regression modelling, considering missing values etc.
+
+```{r chunk13}
+data(weather)
+FahrenheitToDegrees <- function(temp)
+{
+  (temp-32)*5/9
+}
+
+#convert weather into degrees Celcius.
+weatherCleaned <- weather %>% filter(!is.na(temp), !is.na(dewp)) %>% mutate_at(vars(temp, dewp), funs(FahrenheitToDegrees)) %>% mutate(date=make_date(year, month, day)) %>% mutate(date=make_date(year, month, day))
+
+#Prepare the flights data set
+flightDelay <- flights %>%  select(year:day, origin, hour, arr_delay, dep_delay, tailnum) %>% mutate(date=make_date(year, month, day))
+
+#Create a new data set which combines the weather and the flights
+flightsAndWeather <-  inner_join(flightDelay, weatherCleaned, by = c("origin", "date")) %>% na.omit() %>% select(dep_delay, humid,precip, visib, wind_dir, wind_speed, temp, dewp)
+
+flightsAndWeather
+
+#lm(dep_delay~humid, data= flightsAndWeather)
+lm.fit <- lm(dep_delay ~ ., data=flightsAndWeather) 
+
+summary(lm.fit)
+
+#plot(lm.fit)
+
+
+
+
+######TEST 
+#Multiple Linear Regression
+# MyBookSucks.Com
+
+# Independent Variable
+Grades <- c(82,98,76,68,84,99,67,58,50,78)
+
+# Dependendt Variables
+Absences <- c(4,2,2,3,1,0,4,8,7,3)
+SAT_Score <- c(620,750,500,520,540,690,590,490,450,560)
+
+# Creating Regression Equation
+Regression <- lm(Grades ~ Absences + SAT_Score)
+
+#Show the results
+summary(Regression)
+```

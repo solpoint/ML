@@ -1,0 +1,171 @@
+---
+output: html_document
+---
+
+# Pipes
+
+## Introduction
+
+* Pipes are a powerful tool for clearly expressing a sequence of multiple operations.
+* Now, more detail on how they work.
+
+### Prerequisites
+
+* `%>%` comes from the __magrittr__ package by Stefan Milton Bache.
+* Packages in the __tidyverse__ load `%>%` automatically.
+* Here, focus on piping:
+
+```{r setup, message = FALSE}
+library(magrittr)
+```
+
+Pipe: help write/read code.
+
+```{r}
+sum(sqrt(1:10))
+1:10 %>% sqrt() %>% sum()
+
+dplyr::mutate(diamonds, price_per_carat = price / carat)
+
+diamonds %>% 
+  dplyr::mutate(price_per_carat = price / carat)
+```
+
+* Worry: creates many copies of your data and takes up a lot of memory. NO!
+* Proactively worrying about memory is not a useful way to spend your time: worry about it when it becomes a problem (i.e. you run out of memory), not before.
+* R isn't stupid, and it will share columns across data frames, where possible.
+
+```{r}
+diamonds <- ggplot2::diamonds
+diamonds2 <- diamonds %>% 
+  dplyr::mutate(price_per_carat = price / carat)
+
+diamonds %>% 
+  dplyr::filter(carat >= 2) %>% 
+  dplyr::mutate(price_per_carat = price / carat)
+
+pryr::object_size(diamonds)
+pryr::object_size(diamonds2)
+pryr::object_size(diamonds, diamonds2)
+```
+
+`pryr::object_size()` gives the memory occupied by all of its arguments. The results seem counter-intuitive at first:
+
+* `diamonds` takes up 3.46 MB,
+* `diamonds2` takes up 3.89 MB,
+* `diamonds` and `diamonds2` together take up 3.89 MB!
+
+`diamonds2` has 10 columns in common with `diamonds`: no need to duplicate all that data
+* Only copied if modified
+
+```{r}
+diamonds$carat[1] <- NA
+pryr::object_size(diamonds)
+pryr::object_size(diamonds2)
+pryr::object_size(diamonds, diamonds2)
+```
+
+(Note that we use `pryr::object_size()` here, not the built-in `object.size()`. 
+`object.size()` only takes a single object so it can't compute how data is shared across multiple objects.)
+
+The pipe works by performing a "lexical transformation": behind the scenes, __magrittr__ reassembles the code in the pipe to a form that works by overwriting an intermediate object. When you run a pipe like the one above, magrittr does something like this:
+
+```{r, eval = FALSE}
+my_pipe <- function(.) {
+  dplyr::mutate(., price_per_carat = price / carat)
+}
+my_pipe(diamonds)
+```
+
+This means that the pipe won't work for two classes of functions:
+
+1. Functions that use the current environment. For example, `assign()`
+   will create a new variable with the given name in the current environment:
+     
+```{r}
+assign("x", 10)
+x
+
+# assign("x", 100) !==
+"x" %>% assign(100)
+x
+
+my_pipe <- function(., n) {
+  assign(., n)
+  x
+}
+my_pipe("x", 100)
+x
+```
+
+If you do want to use assign with the pipe, you must be explicit about the environment:
+
+```{r}
+env <- environment()
+"x" %>% assign(100, envir = env)
+x
+```
+    
+Other functions with this problem include `get()` and `load()`.
+
+2. Functions that use lazy evaluation.
+In R, function arguments only computed if function uses them, not prior to calling the 
+function. The pipe computes each element in turn, so you can't 
+rely on this behaviour.
+    
+One place that this is a problem is `tryCatch()`, which lets you capture
+and handle errors:
+    
+```{r, error = TRUE}
+tryCatch(stop("!"), error = function(e) "An error")
+
+stop("!") %>% 
+  tryCatch(error = function(e) "An error")
+```
+    
+There are a relatively wide class of functions with this behaviour,
+including `try()`, `suppressMessages()`, and `suppressWarnings()`
+in base R.
+  
+
+## When not to use the pipe
+
+Pipes:
+
+* Do not solve every problem
+* are most useful for a fairly short linear sequence of operations
+
+Think of another way to express yourself when:
+
+* Many steps; create intermediate objects with meaningful names.
+* Multiple inputs or outputs.
+* Complex dependency structure: pipes are fundamentally linear and expressing 
+  complex relationships with them will typically yield confusing code.
+
+## Other tools from magrittr
+
+* Side-effects: The "tee" pipe `%T>%`. 
+  Like `%>%` except it returns the left-hand side instead of the right-hand side. 
+  It's called "tee" because it's like a literal T-shaped pipe.
+
+```{r}
+rnorm(100) %>%
+  matrix(ncol = 2) %>%
+  plot() %>%
+  str()
+
+rnorm(100) %>%
+  matrix(ncol = 2) %T>%
+  plot() %>%
+  str()
+```
+
+* `%$%`: "explodes" out the variables in a data frame so that you can 
+    refer to them explicitly. 
+
+```{r}
+cor(mtcars$disp, mtcars$mpg)
+mtcars %$% cor(disp, mpg)
+with(mtcars, cor(disp, mpg))
+```
+

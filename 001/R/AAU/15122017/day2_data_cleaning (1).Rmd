@@ -1,0 +1,51 @@
+---
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(dataMaid)
+data(toyData)
+toyData
+```
+
+```{r}
+VIM::aggr(toyData, prop = T, numbers = T)
+```
+
+```{r}
+summary(toyData)
+```
+
+```{r}
+toyData2 = toyData %>% 
+  # region
+  mutate(region = as.character(region),
+         region = case_when(
+           region == "OTHER" ~ "other",
+           region == " " ~ NA_character_,
+           region == "." ~ NA_character_,
+           TRUE ~ region
+         ),
+         region = factor(region)) %>% 
+  # events
+  mutate(events = case_when(
+    events == 999 ~ NA_real_,
+    TRUE ~ events
+  ))
+toyData2
+summary(toyData2)
+
+toyData2 %>% filter(!is.na(region))
+toyData2 %>% filter(complete.cases(.))
+```
+
+```{r}
+library(dataMaid)
+data(toyData)
+toyData
+
+makeDataReport(toyData)
+```
+

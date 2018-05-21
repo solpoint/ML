@@ -1,0 +1,186 @@
+---
+title: "Outliers"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+options(width = 160)
+```
+
+# What is an outlier?
+  
+  An outlier is a surprising observation in relation to the majority
+  of the data.
+
+  Wikipedia: "In statistics, an outlier is an observation point that
+  is distant from other observations. An outlier may be due to
+  variability in the measurement or it may indicate experimental
+  error; the latter are sometimes excluded from the data set.""
+  
+  https://en.wikipedia.org/wiki/Outlier
+  
+  Typically, we define *extreme* in terms of how many standard deviations
+  an observations lies away from the central point (mean or median).
+  However, the typical estimate $s$ for the standard deviation is highly
+  influenced by outliers - that is, outliers cause $s$ to increase,
+  and thus makes an outlier less extreme.
+  
+# Detect outliers
+
+## Univariate
+
+  Boxplots and scatterplots are good visual tools for low dimensional
+  problems. 
+
+  The tests for higher dimensional data also works for
+  univariate and low dimensional data.
+  
+  However, note that removing spurious data points may cause bias in
+  your analysis. In some applications the *outliers* are the
+  actual *signal* -- the *noise* being the
+  *normal* data (e.g. micro array analysis in genomics most
+  gene expressions are noise -- few are true signals).
+
+  Better to include them, but with low weight (e.g. by robust
+  regression, see e.g. `MASS::rlm`).
+
+  Different transformations of data can also cause apparent outliers to
+  be closer to the majority of points.
+  
+## Multivariate
+
+  As mention in the beginning, we need to estimate $s$ or in the multivariate
+  case $S$, the empirical covariance matrix in a robust manner, such that the
+  outliers has less influence on the estimate. 
+  
+  There are several methods and implementations for robustly computing
+  the covariance matrix and mean of multivariate data. 
+
+  Similar to the univariate case the methods are less efficient than
+  the sample mean, $\bar{x}$, and standard deviation, $s$, for
+  multivariate normal data. However, at the expense of loss in
+  efficiency, they are more resistant to outliers in the data.
+
+### `rrcov` package
+
+  The package `rrcov` implements such methods:
+
+```{r}
+library(rrcov)
+(swiss_cov_classic <- Cov(swiss))
+(swiss_cov_robust <- CovMcd(swiss))
+```
+
+  It is harder to detect multivariate outliers as they can be hidden
+  in pairwise variable scatter plots and PCA plots. 
+
+  For the latter one would usually resort to robust PCA methods that
+  uses an robust estimate of the covariance/correlation matrix. 
+
+  The `rrcov` package has function `PcaCov` that perform robust PCA.
+  
+```{r}
+data(hbk, package = "robustbase")
+pca_robust <- PcaCov(hbk, scale = TRUE)
+pca_classic <- PcaClassic(hbk, scale = TRUE)
+
+pca_robust
+pca_classic
+```
+
+We can plot these using `biplot` to see the difference
+```{r, fig.width=10, fig.height=7}
+par(mfrow = c(1,2))
+biplot(pca_robust, main = "Robust")
+biplot(pca_classic, main = "Classic")
+```
+  
+Clearly the outliers has a high influence on the rotations. As mentioned above,
+we typically tries to standardise the data to look for extreme observations.
+$$z = \left(\frac{x-\mu_x}{\sigma_x}\right)^2 \quad \text{estimated by}\quad \hat{z} = \left(\frac{x-\hat\mu_x}{\hat\sigma_x}\right)^2$$
+and in the multivariate case this is
+
+$$
+  z = ({x}-{\mu}_x)^\top{\Sigma_x}^{-1}(x-\mu_x)
+  \quad \text{estimated by}\quad
+  \hat{z} = ({x}-{\hat\mu}_x)^\top{\hat\Sigma_x}^{-1}(x-\hat\mu_x).
+  $$
+If we assume that $x$ is normal distributed, then $z$ has a $\chi^2$-distribution with $p$ (the dimension of $x$) degrees of freedom. Hence, we can assess whether $z$ is extreme compared to a 
+$\chi^2_p$ distribution.
+
+Actually, $z$ is what we call a Mahalanobis distance. The greater it is, the more extreme an
+observation is and the more likely it is an outlier.
+
+```{r}
+plot(swiss_cov_robust, which="dd")
+```
+
+We see that because the "classical" covariance matrix is *inflated* by the outliers,
+the Mahalanobis distances are smaller than in the robust case.
+
+### `mvoutlier` package
+
+  The package \textbf{mvoutlier} is designed to identify mulitvariate
+  outliers and implements methods described in 
+  "Outlier identification in high dimensions" by Filzmoser, Maronna and Werner (2008). 
+
+  It has several useful functions, e.g.:
+  
+  * `uni.plot` plot for raising a flag for suspicious observations;
+  * `pcout` for PCA-like approach to outlier detection;
+  * `chisq.plot` for comparing Mahalanobis distances with $\chi^2$-distribution;
+  * `aq.plot` for simulation based approach to the above.
+
+```{r}
+library(mvoutlier)
+swiss_scores <- uni.plot(swiss)
+swiss_scores_ <- uni.plot(swiss, symb = TRUE)
+```
+
+```{r}
+swiss_outliers <- pcout(swiss, makeplot = TRUE)
+USArrests_outliers <- pcout(USArrests, makeplot = TRUE)
+```
+
+Observations breaking the trend
+```{r}
+library(ggfortify)
+USArrests$Outlier <- factor(ifelse(USArrests_outliers$wfinal01==0, "Yes", "No"), 
+                            levels = c("Yes", "No"))
+autoplot(prcomp(USArrests[,1:4], scale. = TRUE), 
+         data = USArrests, colour = 'Outlier', label = TRUE, shape = FALSE,
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3)
+```
+
+The `corr.plot` can help visualise the difference between the classical and robust 
+estimates of the covariance matrix - for this example the sign even changes!
+```{r}
+corr.plot(swiss$Fertility, swiss$Catholic)
+```
+
+Some simulated data
+```{r}
+set.seed(134)
+p <- 4
+n <- c(80,20)
+good_data <- MASS::mvrnorm(n[1],mu=rep(0,p),Sigma=diag(p))
+bad_data <- MASS::mvrnorm(n[2],mu=rep(c(5,-5),each=p/2),Sigma=diag(p))
+all_data <- rbind(good_data,bad_data)
+
+pairs(all_data,col=rep(1:2,n))
+```
+
+The `chisq.plot` can be set interactive by `ask = TRUE` (the default)
+```{r}
+chisq.plot(all_data, ask = FALSE)
+```
+
+```{r}
+res <- aq.plot(all_data, alpha=0.1)
+table(rep(c("good","bad"),n),res$outliers)
+```
+

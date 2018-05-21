@@ -1,0 +1,54 @@
+---
+title: "Tibbles (Chapter 7)"
+author: "Torben"
+date: "November 22, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+```
+
+# Tibbles
+
+Tibbles are the modern alternative to the `data.frame` structure.
+
+Not only does it have prettier print methods
+```{r}
+mtcars %>% print()
+mtcars %>% as_tibble() %>% print()
+## mtcars %T>% print() %>% as_tibble() %>% print()
+```
+
+It also extends to types of elements in the `tibble` - 
+e.g. we could have a `tibble` inside a `tibble` (and most other data structures) 
+by the use of the `list` column type.
+
+```{r}
+X <- tibble(x = list(1:4),
+       y = 1,
+       z = "A")
+X
+X %>% pull(x)
+```
+
+The main difference between the `tidyverse` approach and the *older* type of R programming,
+is the decreased use of `[]` and `[[]]` for subsetting in dataframes.
+
+```{r}
+mtcars[mtcars$cyl==4,c("cyl", "hp")]
+## subset(mtcars, cyl == 4, c("cyl", "hp")) also works
+mtcars %>% filter(cyl == 4) %>% select(cyl,hp)
+```
+
+Note however, `tibbles` do not allow for `rownames`
+
+# Exercises
+
+From chapter 7 solve the following exercises (pp 123 - 124):
+
+1, 2, 3, 5 (and 6)

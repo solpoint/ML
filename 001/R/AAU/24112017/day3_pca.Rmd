@@ -1,0 +1,152 @@
+---
+title: "PCA (Chapter 10.2 in ISLR)"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Principal Component Analysis
+
+In high dimensional problems it may be hard to obtain insights from pairwise 
+plots of the different variables in the data. There are ${p \choose 2} = p(p-1)/2$ combinations 
+(when ignoring trivial flips of the axes). Hence, even for moderate $p$ this is an intractable
+number of plots.. 
+
+A solution is to rotate the data to obtain views of the data which contain as much information 
+as possible. One criterion for "information" is *variablity*.
+
+For two random variables $X$ and $Y$, we know that the linear combination $aX+bY$ for scalars 
+$a$ and $b$ has variance given by:
+$$Var(aX + bY) = a^2Var(X) + b^2Var(Y) + 2abCov(X,Y).$$
+
+We can choose $a$ and $b$ arbitrarily, but we would like to have the variance of $aX+bY$ maximal.
+In order for this to be well-defined we must limit $a$ and $b$: $a^2 + b^2 = 1$, otherwise
+we could make the variance arbitrarily large. The values of $a$ and $b$ defines the rotation 
+of $X$ and $Y$ holding maximum variance.
+
+This idea is the basis of PCA - rotate the data such that the resulting components have 
+maximum variance. For the next components to differ from the previous components we impose
+the requirement that they are uncorrelated with the previous components.
+
+![ISLR Fig 6.14](6_14.png)
+
+![ISLR Fig 6.15](6_15.png)
+
+![ISLR Fig 6.16](6_16.png)
+
+![ISLR Fig 6.17](6_17.png)
+
+# The best approximating low-dimensional linear surface
+
+The PCA can also be viewed as the best linear surface approximating the data in lower 
+dimension. 
+
+![ISLR Fig 10.2](10_2a.png) ![ISLR Fig 10.2](10_2b.png)
+
+# Examples
+
+## PCA analysis of `USArrest` data
+
+First we may make a pairs plot of the data
+```{r, cache=TRUE}
+pairs(USArrests)
+GGally::ggpairs(USArrests)
+```
+
+We see that `Murder`, `Assault` and `Rape` are somewhat correlated and more scatter
+when plotting `UrbanPop` against the three measures of crimes.
+
+We clearly see that the observations have different scales. Hence, it is 
+advisable to use the correlation matrix rather than the covariance matrix 
+for the PCA rotation.
+
+```{r}
+head(USArrests)
+summary(USArrests)
+```
+
+Hence, we use the `scale. = TRUE` in the call to standardise (that is use the 
+correlation matrix) rather than the unit based covariances 
+
+```{r}
+USArrests_pca <- prcomp(USArrests, scale. = TRUE)
+USArrests_pca
+plot(USArrests_pca)
+```
+
+After the PCA rotation, we can yet again make a pairs plot
+```{r, cache=TRUE}
+GGally::ggpairs(USArrests_pca$x %>% as_tibble())
+```
+
+We notice the null-correlations of the PCs
+
+Proportion of variance explained
+```{r}
+cumsum(USArrests_pca$sdev^2)/sum(USArrests_pca$sdev^2)
+```
+
+### Biplots
+
+Showing both the data and variables in the same plots
+
+```{r, fig.width = 12, fig.asp=1}
+par(mfrow = c(2,2), mar = c(1,1,1,1)*4)
+biplot(USArrests_pca, scale = 0, choices = c(1,2))
+biplot(USArrests_pca, scale = 0, choices = c(1,3))
+biplot(USArrests_pca, scale = 0, choices = c(2,3))
+
+USArrests_pca_ <- prcomp(USArrests)
+biplot(USArrests_pca_, scale = 0, choices = c(1,2))
+```
+
+Note, in ISLR they flip the sign of the PCs to obtain an easier interpretation of the 
+PCs - however, this is merely for interpretation purposes.
+```{r, eval = FALSE}
+USArrests_pca$x <- -USArrests_pca$x
+```
+
+## Crabs
+
+In the `MASS` package we have the dataset `crabs``that contain measurements on 
+a specific species of crabs (Leptograpsus).
+
+![Crabs](crabs.png)
+
+The data contains data from 50 males and 50 female crabs of each of two subspecies: 
+blue and orange.
+
+```{r}
+ccol <- function(sp) ifelse(sp=="B","#0f7fa9","#fa8d0f")
+cpch <- function(sx) 1 + 15*(crabs$sex=="M")
+
+data(crabs, package = "MASS")
+pairs(select(crabs,FL:BD), col = ccol(crabs$sp), pch = cpch(crabs$crabs))
+```
+
+Let us consider a PCA rotation
+
+```{r}
+(crab_pca <- prcomp(select(crabs, FL:BD), scale. = TRUE))
+crabs_pca <- predict(crab_pca) %>% as_tibble() ## Rotate the data
+```
+
+Plot the results
+```{r, fig.width=11, fig.asp=1}
+par(mfrow = c(2,2), mar = rep(4,4))
+plot(crab_pca, main = "Screeplot for correlations matrix")
+plot(PC1~PC2,data=crabs_pca, col=ccol(crabs$sp), pch=cpch(crabs$sex))
+plot(PC1~PC2,data=crabs_pca, col=ccol(crabs$sp), pch=cpch(crabs$sex))
+plot(PC2~PC3,data=crabs_pca, col=ccol(crabs$sp), pch=cpch(crabs$sex))
+```
+ 

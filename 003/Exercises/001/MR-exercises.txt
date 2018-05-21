@@ -1,0 +1,52 @@
+*** 4a ***
+map(filename, content):
+	n = content.count("<table>")
+	emit("tables", n)
+	emit("pages", 1)
+	
+reduce(desc, counts):
+	emit(desc, SUM(counts))
+
+	
+
+	
+*** 4b ***
+map(betID, details):
+	matchId = extractMatch(details)
+	homegoals = extractHomeGoals(details)
+	awyGoals = extractAwayGoals(details)
+	emit(matchId,  homeGoals + awayGoals)
+	
+reduce(matchId, expectedGoals):
+	emit(matchId, AVG(expectedGoals))
+	
+
+
+
+*** 4c ***
+map(partId, words):
+	for word in words:
+		emit(sortChars(word), word)
+		
+reduce: Identity
+
+
+
+
+
+
+
+
+*** 5b ***
+map(betID, details):
+	matchId = extractMatch(details)
+	homegoals = extractHomeGoals(details)
+	awyGoals = extractAwayGoals(details)
+	emit(matchId,  (homeGoals + awayGoals, 1))
+	
+combine(matchId, [(goals, cnt),...]):
+	emit(matchId, (SUM(goals), SUM(cnt)))
+	
+reduce(matchId, [(goals, cnt), ...]):
+	emit(matchId, SUM(goals) / SUM(cnt))
+	

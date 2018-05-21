@@ -1,0 +1,155 @@
+---
+title: "Factors with forcats (Chapter 12)"
+author: "Torben"
+date: "November 22, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+library(forcats)
+```
+
+# Factors
+
+Factors are string-like classes that where introduced in R to ease e.g. string comparisons,
+as factors are **categorical variables** only allowed to take on a limited number of defined states.
+
+They are essential in the way we think of statistical modelling in R.
+
+However, they can be a **pain** to deal with for many non-modelling purposes.
+
+The `forcats` package introduces a number of helper functions to ease working with factors.
+
+```{r}
+x1 <- c("Dec", "Apr", "Jan", "Mar")
+x2 <- c("Dec", "Apr", "Jam", "Mar")
+month_levels <- c(
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+```
+
+To tell R there is a non-lexicographic ordring we provide the levels in their natural ordering
+```{r}
+sort(x1)
+sort(factor(x1, levels = month_levels))
+```
+
+If a case is not matched by the predefined classes we get a `NA` in the result
+```{r}
+factor(x2, levels = month_levels)
+```
+
+Sometimes the ordering in the datafile should be used as ordering of the levels.
+The `fct_inorder` handles this -- functions starting with `fct_` most likely originates from `forcats`
+```{r}
+x1 %>% factor() %>% fct_inorder()
+```
+
+# Example
+
+We look at the `gss_cat` data as in the book. To reverse the levels of the e.g. `race` factor, we 
+can use the `fct_rev` function can combine this with a tabulation of race and marital status
+
+```{r}
+gss_cat %>%
+  mutate(race = fct_rev(race)) %>% 
+  count(race, marital)
+```
+
+To get this into a more tabular format we can add a spread line in the end
+```{r}
+gss_cat %>%
+  mutate(race = fct_rev(race)) %>% 
+  count(race, marital) %>% 
+  spread(key = marital, value = n)
+```
+
+## Modifying the ordering 
+
+It may be instructive to reorder a factor based on the marginal information of one or two variables.
+E.g. some plots convey a stronger message if the trend in data is visualised by reordering the groups.
+
+```{r}
+relig_summary <- gss_cat %>%
+  group_by(relig) %>%
+  summarise(
+    age = mean(age, na.rm = TRUE),
+    tvhours = mean(tvhours, na.rm = TRUE),
+    n = n()
+  )
+
+ggplot(relig_summary, aes(tvhours, relig)) + geom_point()
+```
+
+We clearly see that ordering the data according to the TV hours is more informative.
+For this the `fct_reorder` is perfect -- without it we would need a lot of taylored code to rearrange the `relig` factor.
+Below the `relig` factor is ordered such that the levels are in increasing order according to `tvhours`.
+
+```{r}
+ggplot(relig_summary, aes(tvhours, fct_reorder(relig, tvhours))) +
+  geom_point()
+```
+
+The function `fct_relevel` makes it easy to put a specific value in a specific spot in the levels
+```{r}
+days <- c("Mon", "Tue", "Weds", "Thur", "Fri", "Sat", "Sun") %>%
+  factor() %>% fct_inorder()
+days
+fct_relevel(days, "Sun", after = 0) ## Week starts with Sunday
+```
+
+## Modifying the levels
+
+Changing the names of the levels is typically necessary for pretty plots and tablular output.
+
+The `fct_recode` and `fct_collapse` are friends in need for this recurring challenge.
+
+To recode/rename we combine `mutate` and `fct_recode`, where the syntax is
+`"new level" = "old level"` in `fct_recode` with the first argument being the factor to modify.
+
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_recode(partyid,
+    "Republican, strong"    = "Strong republican",
+    "Republican, weak"      = "Not str republican",
+    "Independent, near rep" = "Ind,near rep",
+    "Independent, near dem" = "Ind,near dem",
+    "Democrat, weak"        = "Not str democrat",
+    "Democrat, strong"      = "Strong democrat"
+  )) %>%
+  count(partyid)
+```
+
+Typically we have made a two fine split of the data and wants to collapse these to fewer categories.
+Here `fct_collapse` is handy -- it has the same syntax as `fct_recode`.
+
+```{r}
+gss_cat %>%
+  mutate(partyid = fct_collapse(partyid,
+    other = c("No answer", "Don't know", "Other party"),
+    rep = c("Strong republican", "Not str republican"),
+    ind = c("Ind,near rep", "Independent", "Ind,near dem"),
+    dem = c("Not str democrat", "Strong democrat")
+  )) %>%
+  count(partyid)
+```
+
+The last bit of tweeking is to "lump" together the smallest groups in the data.
+Using the `fct_lump` we can collapse the variable into the `n` largest groups and the group `other_level` 
+(by default called `"Other"`)
+
+```{r}
+gss_cat %>%
+  mutate(relig = fct_lump(relig, n = 10, other_level = "Other")) %>%
+  count(relig, sort = TRUE) %>%
+  print(n = Inf)
+```
+

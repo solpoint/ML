@@ -1,0 +1,160 @@
+---
+title: "Data Import with readr  (Chapter 8)"
+author: "Torben"
+date: "November 22, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA, message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+# `readr`
+
+The comma separated files are a typical flat spreadsheet file format to encounter (we discuss Excel files below).
+
+The `read_csv` and `read_csv2` functions are replacements for base R's 
+`read.csv` and `read.csv2` with almost the same properties. However, there are some important differences.
+
+With the `_` functions strings are __never__ converted to factors. This is default for the `.` counterparts!
+
+```{r, include=FALSE}
+## Saves the massey-rating.txt from the readr package as local file
+write_csv(read_table(readr_example("massey-rating.txt")), path = "massey_rating.csv")
+```
+
+Read in some example data with numeric and string columns
+```{r, message=TRUE}
+massey_ <- read_csv("massey_rating.csv")
+massey. <- read.csv("massey_rating.csv")
+```
+
+For `massey.` the strings are converted to factors -- can cause problems down stream in your analysis.
+```{r}
+class(massey_$Team)
+class(massey.$Team)
+```
+
+## Column types 
+
+From the output above we got a parsing message informing us about the type of class of each column.
+By default the `col_guess()` is used - this function *guesses* the column type by the first `guess_max` rows in the file.
+
+We can change this using the `col_types` argument in `read_csv` by using `cols` and the `col_*` functions:
+
+* `col_character` (`"c"`)
+* `col_double` (`"d"`)
+* `col_factor`
+* `col_guess`  (`"?"`)
+* `col_integer` (`"i"`)
+* `col_logical` (`"l"`)
+* `col_number` (`"n"`)
+
+* `col_date` (`"D"`)
+* `col_datetime` (`"T"`)
+* `col_time` (`"t"`)
+
+For example, we may insist that `UCC` is of type double by using `col_double()`
+
+```{r}
+read_csv("massey_rating.csv", 
+         col_types = cols(
+           UCC = col_double()
+           ))
+```
+
+This can be shortened by the shorthand `"d"`
+```{r}
+read_csv("massey_rating.csv", 
+         col_types = cols(
+           UCC = col_double(),
+           PAY = "d"
+           ))
+```
+
+The special `col_skip` (`"_"` or `"-"`) discards the column on import
+```{r}
+read_csv("massey_rating.csv", 
+         col_types = cols(
+           DII = "_", ## Skip
+           ENG = "-", ## Skip
+           ACU = "c",
+           Rank = "i",
+           Team = col_factor(NULL),
+           Conf = col_character()
+           )
+         )
+```
+
+## Only specific 
+
+If it is only a small part of the input columns we would like to read, then the `cols_only` is efficient
+```{r}
+read_csv("massey_rating.csv", 
+         col_types = cols_only(
+           Team = col_factor(NULL),
+           Conf = "c"
+           )
+         )
+```
+
+## Column names
+
+If the input file do not have column headers, we can provide these and set their type.
+
+```{r}
+read_csv("1,2,3\n4,5,6",
+         col_names = c("A", "B", "C"),
+         col_types = cols(
+           A = "c",
+           B = "i",
+           C = "d"
+         ))
+```
+
+
+Other functions in `readr` for other types of flat files:
+
+* `read_tsv()`: tab separated files
+* `read_delim()`: general delimited files
+* `read_fwf()`: fixed width files
+* `read_table()`: tabular files where columns are separated by white-space.
+* `read_log()`: web log files
+
+**`data.table` (a different package with a _very_ different syntax)**
+
+data.table has a function similar to `read_csv()` called `fread`. Compared to `fread`, `readr` functions:
+
+* Are slower (currently ~1.2-2x slower. If you want absolutely the best performance, use `data.table::fread()`.
+
+* Use a slightly more sophisticated parser, recognising both doubled (`""""`) and backslash escapes (`"\""`), and can produce factors and date/times directly.
+
+* Forces you to supply all parameters, where `fread()` saves you work by automatically guessing the delimiter, whether or not the file has a header, and how many lines to skip.
+
+* Are built on a different underlying infrastructure. Readr functions are designed to be quite general, which makes it easier to add support for new rectangular data formats. `fread()` is designed to be as fast as possible.
+
+# `readxl`
+
+Reads data from Excel (`xls` and `xlsx` types) with the possibility to select different sheets and ranges.
+
+# `haven` 
+
+To interact with SPSS (`read_spss` or `read_sav`), stata (`read_stata`) and SAS (`read_sas`) data files
+
+# `rio`
+
+Attempt to harmonise the interface for read and write from/to external files for various file formats.
+
+https://github.com/leeper/rio
+
+
+
+```{r, include=FALSE}
+## Deletes the massey_rating.csv file again
+file.remove("massey_rating.csv")
+```

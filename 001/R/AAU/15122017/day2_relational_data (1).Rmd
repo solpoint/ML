@@ -1,0 +1,245 @@
+---
+output: html_document
+---
+
+# Intro
+
+* Many tables
+* Collectively called relational data: relations are important, not just individual tables
+
+Three families of verbs:
+
+* Mutating joins: add new variables to $x$ from $y$ for matching rows
+* Filtering joins: filter observations based on a row in $x$ matching one in $y$
+* Set operations: rows are set elements
+
+```{r}
+library(tidyverse)
+library(nycflights13)
+```
+
+For `nycflights13`:
+
+```{r}
+flights
+flights %>% select(origin, dest)
+airlines
+airports
+planes
+weather
+```
+
+* `flights` connects to `planes` via a single variable, `tailnum`.
+* `flights` connects to `airlines` through the `carrier` variable.
+* `flights` connects to `airports` in two ways: via the `origin` (to `faa`) and `dest` (to `faa`) variables.
+* `flights` connects to `weather` via `origin` (the location), and `year`, `month`, `day` and `hour` (the time).
+* `airports` connects to `weather` through the `origin` (to `faa`) variable.
+
+# Keys
+
+* A **key** is a variable (or set of variables) that identifies uniquely an observation in a table
+    * `flights`: `tailnum`
+    * `weather`: (`year`, `month`, `day`, `hour`, and `origin`)
+
+* Primary key: uniquely identifies an observation in its own table.
+    * `planes$tailnum`: uniquely identifies each plane in the planes table
+* Foreign key: uniquely identifies an observation in another table.
+    * `flights$tailnum` is a foreign key because it appears in the `flights` table where it matches each flight to a unique plane.
+
+Both being primary key and foreign key possible: `origin` is part of the `weather` primary key, and is also a foreign key for the `airport` table.
+
+Verify (note difference to database systems: primary key vs unique index):
+
+```{r}
+planes %>% 
+  count(tailnum) %>% 
+  filter(n > 1)
+
+weather %>% 
+  count(year, month, day, hour, origin) %>% 
+  filter(n > 1)
+```
+
+No explicit primary key: each row is an observation, but no combination of variables reliably identifies it.
+
+```{r}
+flights %>% 
+  count(year, month, day, flight) %>% 
+  filter(n > 1)
+
+flights %>% 
+  count(year, month, day, tailnum) %>% 
+  filter(n > 1)
+```
+
+Can potentially add new column `row_id = row_number()` using `mutate()`.
+
+  
+# Mutating joins
+
+```{r}
+flights2 <- flights %>% 
+  select(year:day, hour, origin, dest, tailnum, carrier)
+flights2
+
+flights2 %>%
+  select(-origin, -dest) %>% 
+  left_join(airlines, by = "carrier")
+
+flights2 %>%
+  select(-origin, -dest) %>% 
+  mutate(name = airlines$name[match(carrier, airlines$carrier)])
+```
+
+Latter: hard to generalise when you need to match multiple variables, and takes close reading to figure out the overall intent.
+
+## Joins
+
+```{r}
+x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     3, "x3"
+)
+
+y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2",
+     4, "y3"
+)
+
+x
+y
+```
+
+Inner join (inner equijoin, keys are matched using the equality operator):
+
+```{r}
+x %>% inner_join(y, by = "key")
+```
+
+Outer joins:
+
+```{r}
+x %>% left_join(y, by = "key")
+x %>% right_join(y, by = "key")
+x %>% full_join(y, by = "key")
+```
+
+Duplicate keys:
+
+1. One table has duplicate keys. Add in additional information as there is typically a one-to-many relationship.
+
+```{r}
+# 1:
+x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     2, "x3",
+     1, "x4"
+)
+y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2"
+)
+x
+y
+left_join(x, y, by = "key")
+```
+
+2. Both tables have duplicate keys. This is usually an error because in neither table do the keys uniquely identify an observation. When you join duplicated keys, you get all possible combinations, the Cartesian product.
+
+```{r}
+x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     2, "x3",
+     3, "x4"
+)
+y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2",
+     2, "y3",
+     3, "y4"
+)
+left_join(x, y, by = "key")
+```
+
+## Specifying the key columns
+
+```{r}
+flights2 %>% 
+  left_join(weather)
+```
+
+```{r}
+flights2 %>% 
+  left_join(planes, by = "tailnum")
+```
+
+```{r}
+flights2 %>% 
+  left_join(airports, by = c("dest" = "faa"))
+
+flights2 %>% 
+  left_join(airports, by = c("origin" = "faa"))
+```
+
+# Filtering joins
+
+* `semi_join(x, y)` **keeps** all observations in `x` that have a match in `y`.
+* `anti_join(x, y)` **drops** all observations in `x` that have a match in `y`.
+
+```{r}
+top_dest <- flights %>%
+  count(dest, sort = TRUE) %>%
+  head(10)
+top_dest
+
+flights %>% 
+  filter(dest %in% top_dest$dest)
+```
+
+Multiple variables? E.g.: 10 days with highest average delays. Filter for `year`, `month`, and `day`?
+
+```{r}
+flights %>% 
+  semi_join(top_dest)
+```
+
+# Set operations
+
+```{r}
+df1 <- tribble(
+  ~x, ~y,
+   1,  1,
+   2,  1
+)
+df2 <- tribble(
+  ~x, ~y,
+   1,  1,
+   1,  2
+)
+```
+
+```{r}
+intersect(df1, df2)
+
+# Note that we get 3 rows, not 4
+union(df1, df2)
+
+setdiff(df1, df2)
+
+setdiff(df2, df1)
+```
+
+
+# Exercises
+
+R4DS (online): 13.4.6: 1-5 [= Exercises on p. 186-187 in R4DS book].

@@ -1,0 +1,172 @@
+Guess what these functions do:
+
+```
+double f1(NumericVector x) {
+   int n = x.size();
+   double y = 0;
+   
+   for(int i = 0; i < n; ++i) {
+     y += x[i];
+   }
+   
+   return y / n;
+}
+```
+
+```
+NumericVector f2(NumericVector x) {
+  int n = x.size();
+  NumericVector out(n);
+  out[0] = x[0];
+  for(int i = 1; i < n; ++i) {
+    out[i] = out[i - 1] + x[i];
+  }
+  return out;
+}
+```
+
+
+```
+bool f3(LogicalVector x) {
+  int n = x.size();
+  for(int i = 0; i < n; ++i) {
+    if (x[i]) return true;
+  }
+  return false;
+}
+```
+
+
+
+
+
+## Datatypes in Rcpp
+
+See <http://adv-r.had.co.nz/Rcpp.html>
+
+## Preparation
+
+* `install.packages("Rcpp")`
+* On windows, install [Rtools](https://cran.r-project.org/bin/windows/Rtools/)
+* On mac: Xcode install command line tools.
+* On linux, things work out of the box.
+
+* Details can be found [here](http://www.rstudio.com/ide/docs/packages/prerequisites) 
+
+
+To check your installation do:
+
+```{r}
+library(Rcpp)
+evalCpp("1+1")
+```
+
+### Example: factorial
+
+The factorial function 
+$$n!=n\cdot(n-1)\cdot(n-2)\cdot\dots \cdot 2 \cdot 1$$ 
+can be defined recursively as 
+$$n!=f(n)=n f(n-1)$$ 
+with $f(1)=1$.
+
+Recursive implementation:
+
+```{r}
+fact.rec <- function(n){
+  if (n == 1) return(1)
+  return( n * fact.rec(n - 1) )
+}
+```
+
+
+Iterative implementation:
+
+```{r}
+fact.it <- function(n){
+  out <- 1
+  if (n > 1){
+      for (i in 2:n){
+          out <- out * i
+      }
+  }
+  out
+}
+```
+
+Neither of the implementations are particularly fast.  
+We benchmark the functions
+
+```{r}
+library(microbenchmark)
+n <- 8
+
+c(fact.rec(n), fact.it(n), factorial(n))
+
+microbenchmark(fact.rec(n), fact.it(n), factorial(n))
+```
+
+Using Rcpp we can do:
+
+```{r}
+library(Rcpp)
+
+# Recursive implementation
+cppFunction(
+'int fact_rec_c(int M){
+     if (M==1) return 1;
+     return M*fact_rec_c(M-1);
+}')
+
+# Iterative implementation
+cppFunction('
+int fact_it_c(int M){
+    int out=1;
+    if (M>1){
+       for (int i=1; i<=M; ++i){
+          out *= i;
+       }
+    }
+    return out;
+}')
+```
+
+```{r}
+c( fact_rec_c(n), fact_it_c(n), factorial(n) )
+
+microbenchmark(fact.rec(n), fact.it(n), 
+               fact_rec_c(n), fact_it_c(n), factorial(n)  )
+```
+
+
+The `cppFunction()` above is excellent for testing things quickly, but soon we want our C++ code in a separate file. 
+One way of creating this from within R is as:
+
+```{r}
+cat(
+'#include <Rcpp.h>  
+using namespace Rcpp ;
+
+// [[Rcpp::export]]
+int fact_rec_c(int M){
+     if (M==1) return 1;
+     return M*fact_rec_c(M-1);
+}
+
+// [[Rcpp::export]]
+int fact_it_c(int M){
+    int out=1;
+    if (M>1){
+       for (int i=1; i<=M; ++i){
+          out *= i;
+       }
+    }
+    return out;
+}', file="factorial.cpp")
+```
+
+Compile the file with
+
+```{r}
+sourceCpp("factorial.cpp")
+```
+

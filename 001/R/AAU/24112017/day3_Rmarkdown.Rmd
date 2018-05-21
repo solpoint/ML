@@ -1,0 +1,221 @@
+---
+title: "Rmarkdown (Chapter 21)"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+chunk <- "```"
+inline <- function(x = "") paste0("`` `r ", x, "` ``")
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Computational essays
+
+http://blog.stephenwolfram.com/2017/11/what-is-a-computational-essay/ 
+
+There are basically three kinds of things [in a computational essay]:
+
+* First, ordinary text (here in English). 
+* Second, computer input. 
+* And third, computer output. 
+
+And the crucial point is that these three kinds of these all work together to express what’s being communicated.
+
+# Rmarkdown
+
+Interleaved R input and output together with your narative. In R we use Rmarkdown which combines [markdown](https://en.wikipedia.org/wiki/Markdown) with R input and rendered output. We can (depending on 
+system install) output to html, pdf and MS Word files. This implies that we can make both static and dynamic
+documents, including tables, pictures and mathematical formulae.
+
+## Workflow in compiling the document
+
+![Rmarkdown flow](RMarkdownFlow.png)
+
+## YAML header
+
+Yet Another Meta Language
+
+```
+---
+title: "Rmarkdown (Chapter )"
+author: "Torben"
+date: "December 15, 2017"
+output: html_document
+---
+```
+
+## Text elements
+
+We can include the input from other files in the file hierarchy. The way to include the `markdown.Rmd` file 
+below ensures that it is printed as (raw uncompiled) text.
+
+In the list below we see the markdown (unrelated to R) syntax for the markup syntax of the most often
+used formatting for simple text documents.
+
+```{r, echo = FALSE, comment = ""}
+cat(readr::read_file("day3_markdown.Rm"))
+```
+
+
+### Tables
+
+#### `knitr`
+
+Produces the markdown code for a table
+```{r}
+knitr::kable(
+  mtcars[1:5, ], 
+  caption = "A knitr kable."
+)
+```
+
+#### `DT`
+
+```{r}
+DT::datatable(
+  mtcars[1:5, ], 
+  caption = "A DT datatable (uses the DT javascript library).",
+  filter = "bottom"
+)
+
+```
+
+#### `pander`
+```{r}
+pander::pander(
+  mtcars[1:5, ], 
+  caption = "A pander table."
+)
+```
+
+### Chunk options
+
+The complete list is available at [Yihui Xie's webpage](https://yihui.name/knitr/options/#code-decoration)
+
+The most relevant ones are (default first):
+
+* `eval = TRUE/FALSE`: Evaluate the code? Can also be numeric, e.g. `eval = 1:3` only evaluates the first three
+lines. This can also be negative, e.g. `eval = -2` skips line two.
+* `include = TRUE/FALSE`: Should the *output* be included in the document?
+* `echo = TRUE/FALSE`: Should the *input* be included in the document? Can also be numeric.
+* `message = TRUE/FALSE`: Should messages be included?
+* `warning = TRUE/FALSE`: Should warnings be included?
+* `results = 'markup', 'asis', 'hold', 'hide'`. The `'hide'` options suppress te results and `'asis'` do not 
+format the output.
+* `error = FALSE/TRUE`: Should errors be allowed (i.e. should be continue on error?)
+
+
+Option             | Run code | Show code | Output | Plots | Messages | Warnings 
+-------------------|----------|-----------|--------|-------|----------|---------
+`eval = FALSE`     | -        |           | -      | -     | -        | -
+`include = FALSE`  |          | -         | -      | -     | -        | -
+`echo = FALSE`     |          | -         |        |       |          |
+`results = "hide"` |          |           | -      |       |          | 
+`fig.show = "hide"`|          |           |        | -     |          |
+`message = FALSE`  |          |           |        |       | -        |
+`warning = FALSE`  |          |           |        |       |          | -
+
+### Caching
+
+Occationally we have parts of the code that takes very long time to run. E.g. when tuning parameters
+in some data mining/machine learning algorithm it can take several hours. However, to allow such analysis
+to be included in a Rmarkdown document, the `cache` option is available in Rmarkdown.
+
+    `r chunk`{r raw_data}
+    rawdata <- readr::read_csv("a_very_large_file.csv")
+    `r chunk`
+    
+Where reading the file and process it subsequently could take a lot of time.
+
+    `r chunk`{r processed_data, cache = TRUE}
+    processed_data <- rawdata %>% 
+      filter(!is.na(import_var)) %>% 
+      mutate(new_variable = complicated_transformation(x, y, z))
+    `r chunk`
+
+Caching the processed_data chunk means that it will get re-run if the dplyr pipeline is changed, 
+but it won’t get rerun if the `read_csv()` call changes (that is if the data changes!). 
+You can avoid that problem with the `dependson` chunk option:
+
+    `r chunk`{r processed_data, cache = TRUE, dependson = "raw_data"}
+    processed_data <- rawdata %>% 
+      filter(!is.na(import_var)) %>% 
+      mutate(new_variable = complicated_transformation(x, y, z))
+    `r chunk`
+
+This example, and other, can highlight the importance of naming your chunks. A different example involves
+appendix of code. That is, code you need in the beginning of your document, but you don't want it to jam 
+up the narrative, but on the other hand it may be important to show the code later for other people.
+
+### Appendixing
+
+We achieve this by referring to the relevant chunk, here `"appendix"`.
+
+    `r chunk`{r, ref.label="appendix", echo = FALSE}
+    `r chunk`
+
+And then in the end of the document we have the chunk named `appendix`
+
+    `r chunk`{r appendix}
+    some_very_complicated_function <- function(...){
+       [...]
+    }
+    `r chunk`
+
+### Global options
+
+    `r chunk`{r setup, include=FALSE}
+    knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA, 
+                          fig.width = 10, warning = FALSE, error = TRUE)
+    `r chunk`
+
+By setting the above line in the beginning of the document, these values applies as default values for _all_ 
+chunks in the document. However, all options can be overwritten locally.
+
+### Inline code
+
+When we want to format code in `tt`-font, we simply enclose it in ticks. If we want to output from R, 
+we simply add a r in the beginning, e.g. `2+3 =` `r 2+3`
+
+### Parameters
+
+The use of parameters is particularly relevant for automated generated reports or documents where users
+input data in e.g. a webformular (for instance using the Shiny framework in R).
+
+For example, let the following be the header of document `report.Rmd`
+
+    `r chunk`
+    ---
+    THE USUAL yaml HEADER
+    
+    params:
+      set_title: "My title"
+      set_author: "My name"
+    ---
+
+    ---
+    title: `R params$set_title`                     ## NOTE: R should be r
+    author: `R params$set_author`                   ##       but want compile  
+    date: `R format(Sys.time(), "%a %b %d %X %Y")`  ##       if lower case 
+    ---
+    `r chunk`
+
+And on the R-side of things:
+
+    `r chunk`{r}
+    render(input = 'report.Rmd',
+           params = list(
+           set_title = paste("Autogenerated report on ", some_text_variable_with_topic),
+           set_author = some_text_variable_with_name
+                        )
+          )
+    `r chunk`
+

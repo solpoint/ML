@@ -1,0 +1,465 @@
+---
+output: html_document
+---
+
+# Model building
+
+## Introduction
+
+Now: real data. Progressively build a model to aid understanding the data.
+
+Model: partitioning your data into pattern and residuals. Systematic and random part.
+
+Find patterns with visualisation.
+Make them concrete and precise with a model.
+
+Repeat: replace the old response variable with the residuals from the model. 
+
+Go from implicit knowledge in the data and your head to explicit knowledge in a quantitative model.
+Formalise the structure in the data.
+
+Modeling is hard work and is difficult! Takes time and experience.
+
+Another strategy: black-box / machine learning approach: focus on the predictive ability of the model. Maybe even ensemble learning (multiple learning algorithms). 
+
+* Don't know why a model is good. 
+* Don't learn anything about the underlying mechanism.
+* Generalise? Work in long term?
+
+Often a combination.
+
+Stop when the game is still fun -> stop before further investment is unlikely to pay off.
+
+### Prerequisites
+
+Real datasets: 
+
+* `diamonds` from __ggplot2__
+* `flights` from __nycflights13__
+
+```{r setup, message = FALSE}
+library(tidyverse)
+library(modelr)
+options(na.action = na.warn)
+
+library(nycflights13)
+library(lubridate)
+```
+
+## Why are low quality diamonds more expensive?
+
+Surprising relationship: low quality diamonds (poor cuts, bad colours, and inferior clarity) have higher prices.
+
+```{r dev = "png"}
+ggplot(diamonds, aes(cut, price)) + geom_boxplot()
+ggplot(diamonds, aes(color, price)) + geom_boxplot() # worst J (slightly yellow)
+ggplot(diamonds, aes(clarity, price)) + geom_boxplot() # worst I1 (inclusions visible to the naked eye)
+```
+
+### Price and carat
+
+Important confounding variable: the weight (`carat`) of the diamond. 
+
+Confounding variable / confounder: Confuses conclusions. Many ice creams are sold related to many people drown. Weather is a confounder.
+
+Weight: single most important factor for determining the price of the diamond, and lower quality diamonds tend to be larger.
+
+```{r}
+ggplot(diamonds, aes(carat, price)) + 
+  geom_hex(bins = 50)
+```
+
+How do other attributes of a diamond affect its relative `price`? Model! Separate out the effect of `carat` and see what is left.
+
+Couple of tweaks to the diamonds dataset to make it easier to work with:
+
+1. Focus on diamonds smaller than 2.5 carats (99.7% of the data)
+2. Log-transform the carat and price variables.
+
+```{r}
+diamonds2 <- diamonds %>% 
+  filter(carat <= 2.5) %>% 
+  mutate(lprice = log2(price), lcarat = log2(carat))
+```
+
+```{r}
+ggplot(diamonds2, aes(lcarat, lprice)) + 
+  geom_hex(bins = 50)
+```
+
+Log-transformation: makes the pattern linear. Modelling easier. Interpretation may be harder.
+
+Step 1: Remove that strong linear pattern:
+
+```{r}
+mod_diamond <- lm(lprice ~ lcarat, data = diamonds2)
+```
+
+Back transform the predictions to enable overlay the predictions on the original data:
+
+```{r}
+grid <- diamonds2 %>% 
+  data_grid(carat = seq_range(carat, 20)) %>% 
+  mutate(lcarat = log2(carat)) %>% 
+  add_predictions(mod_diamond, "lprice") %>% 
+  mutate(price = 2^lprice) # inverse of log2(.)
+
+ggplot(diamonds2, aes(carat, price)) + 
+  geom_hex(bins = 50) + 
+  geom_line(data = grid, colour = "red", size = 1)
+```
+
+Interesting! If believe model: large diamonds are much cheaper than expected.
+
+Residuals:
+
+```{r}
+diamonds2 <- diamonds2 %>% 
+  add_residuals(mod_diamond, "lresid")
+
+ggplot(diamonds2, aes(lcarat, lresid)) + 
+  geom_hex(bins = 50)
+```
+
+Re-do our motivating plots using those residuals instead of `price`. 
+
+```{r dev = "png"}
+ggplot(diamonds2, aes(cut, lresid)) + geom_boxplot()
+ggplot(diamonds2, aes(color, lresid)) + geom_boxplot()
+ggplot(diamonds2, aes(clarity, lresid)) + geom_boxplot()
+```
+
+Clear systematic effect not accounted for in model.
+
+Quality of diamond increases -> increase in relative price.
+
+Residual = -1: `lprice` was 1 unit lower than prediction (on log2 scale) based solely on its weight. 
+$2^{-1}$ is 1/2 -> points with a residual of -1 are half the expected price
+Residuals with value 1 are twice the predicted price.
+
+### A more complicated model
+
+```{r}
+mod_diamond2 <- lm(lprice ~ lcarat + color + cut + clarity, data = diamonds2)
+```
+
+This model now includes four predictors, so it's getting harder to visualise.
+
+Only main effects, plot individually: 
+
+```{r}
+diamonds2 %>% 
+  select(lcarat, color, clarity) %>% 
+  summary()
+
+grid <- diamonds2 %>% 
+  data_grid(cut, lcarat = -0.51457, color = "G", clarity = "SI1") %>% 
+  add_predictions(mod_diamond2)
+grid
+
+ggplot(grid, aes(cut, pred)) + 
+  geom_point()
+```
+
+`data_grid` takes `.model` argument (avoids `lcarat = -0.51457, color = "G", clarity = "SI1"`).
+
+```{r}
+diamonds2 <- diamonds2 %>% 
+  add_residuals(mod_diamond2, "lresid2")
+
+ggplot(diamonds2, aes(lcarat, lresid2)) + 
+  geom_hex(bins = 50)
+```
+
+Some diamonds with large residuals; residual = 2 -> diamond is 4x the price that we expected (under the model).
+
+Inspect unusual values individually:
+
+```{r}
+diamonds2 %>% 
+  filter(abs(lresid2) > 1) %>% 
+  add_predictions(mod_diamond2) %>% 
+  mutate(pred = round(2 ^ pred)) %>% 
+  select(price, pred, carat:table, x:z) %>% 
+  arrange(price)
+```
+
+Inspection probably requires deeper data knowledge to identify problems.
+Sometimes errors are obvious.
+
+
+## What affects the number of daily flights?
+
+The number of flights that leave NYC per day. 
+
+```{r}
+daily <- flights %>% 
+  mutate(date = make_date(year, month, day)) %>% 
+  group_by(date) %>% 
+  summarise(n = n())
+daily
+
+ggplot(daily, aes(date, n)) + 
+  geom_line()
+```
+
+### Day of week
+
+Long-term trend? Strong day-of-week effect:
+
+```{r}
+daily <- daily %>% 
+  mutate(wday = wday(date, label = TRUE))
+
+ggplot(daily, aes(wday, n)) + 
+  geom_boxplot()
+```
+
+Fewer flights on weekends: most travel is for business. Especially Saturday (not surprisingly).
+
+Remove this strong pattern with a model. 
+
+```{r}
+mod <- lm(n ~ wday, data = daily)
+
+grid <- daily %>% 
+  data_grid(wday) %>% 
+  add_predictions(mod, "n")
+
+ggplot(daily, aes(wday, n)) + 
+  geom_boxplot() +
+  geom_point(data = grid, colour = "red", size = 4)
+```
+
+Compute and visualise the residuals:
+
+```{r}
+daily <- daily %>% 
+  add_residuals(mod)
+
+daily %>% 
+  ggplot(aes(date, resid)) + 
+  geom_ref_line(h = 0) + 
+  geom_line()
+```
+
+Y-axis: Deviation from the expected number of flights, given the day of week. 
+
+Patterns that remain after removing day-of-week effect:
+
+1.  Fail in June: Drawing one line per week day:
+
+    ```{r}
+    ggplot(daily, aes(date, resid, colour = wday)) + 
+      geom_ref_line(h = 0) + 
+      geom_line()
+    ```
+    
+    During summer there are more Saturday flights than we expect!
+    During fall there are fewer. 
+    Correction coming up!
+
+2.  There are some days with far fewer flights than expected:
+
+    ```{r}
+    daily %>% 
+      filter(resid < -100)
+    ```
+    
+    American public holidays:
+    
+    * New Year's day
+    * July 4th
+    * Thanksgiving
+    * Christmas
+    
+    And a few others (exercises).
+    
+3.  Smoother long term trend over the course of a year.
+    Use `geom_smooth()`:
+
+    ```{r}
+    daily %>% 
+      ggplot(aes(date, resid)) + 
+      geom_ref_line(h = 0) + 
+      geom_line(colour = "grey50") + 
+      geom_smooth(se = FALSE, span = 0.20)
+    ```
+
+    Fewer flights in January (and December), 
+    More in summer (May-Sep). 
+    
+    Difficult to handle such season variation with only data from one year.
+
+### Seasonal Saturday effect
+
+Saturday flights corretion: Raw numbers:
+
+```{r}
+daily %>% 
+  filter(wday == "Sat") %>% 
+  ggplot(aes(date, n)) + 
+    geom_point() + 
+    geom_line() +
+    scale_x_date(name = NULL, date_breaks = "1 month", date_labels = "%b")
+```
+
+Summer: people ok travelling Saturday.
+
+More Saturday flights in the Spring than the Fall? R4DS: Maybe less common to plan family vacations during the Fall because of the big Thanksgiving and Christmas holidays. 
+
+Lets create a "term" variable that roughly captures the three school terms, and check our work with a plot:
+
+```{r}
+term <- function(date) {
+  cut(date, 
+      # Manually tweaked
+      breaks = ymd(20130101, 20130605, 20130825, 20140101),
+      labels = c("spring", "summer", "fall") 
+  )
+}
+
+daily <- daily %>% 
+  mutate(term = term(date)) 
+
+daily %>% 
+  filter(wday == "Sat") %>% 
+  ggplot(aes(date, n, colour = term)) +
+  geom_point(alpha = 1/3) + 
+  geom_line() +
+  scale_x_date(NULL, date_breaks = "1 month", date_labels = "%b")
+```
+
+It's useful to see how this new variable affects the other days of the week:
+
+```{r}
+daily %>% 
+  ggplot(aes(wday, n, colour = term)) +
+    geom_boxplot()
+```
+
+Much variation across the terms: A separate day of week effect for each term:
+
+```{r}
+mod1 <- lm(n ~ wday, data = daily)
+mod2 <- lm(n ~ wday * term, data = daily)
+
+daily %>% 
+  gather_residuals(without_term = mod1, with_term = mod2) %>% 
+  ggplot(aes(date, resid, colour = model)) +
+    geom_line(alpha = 0.75)
+```
+
+Not as big an improvement as hoped for.
+
+We can see the problem by overlaying the predictions from the model on to the raw data:
+
+```{r}
+grid <- daily %>% 
+  data_grid(wday, term) %>% 
+  add_predictions(mod2, "n")
+
+ggplot(daily, aes(wday, n)) +
+  geom_boxplot() + 
+  geom_point(data = grid, colour = "red") + 
+  facet_wrap(~ term)
+```
+
+Model: _mean_ effect. Lots of big outliers. Mean tends to be far away from the typical value.
+
+Robust model: `MASS::rlm()`. Gives a model that does well removing day of week pattern:
+
+```{r, warn = FALSE}
+mod3 <- MASS::rlm(n ~ wday * term, data = daily)
+
+daily %>% 
+  add_residuals(mod3, "resid") %>% 
+  ggplot(aes(date, resid)) + 
+  geom_hline(yintercept = 0, size = 2, colour = "white") + 
+  geom_line()
+```
+
+It's now much easier to see the long-term trend, and the positive and negative outliers.
+
+
+Structure in outliers are normally bad, but large outliers are not necessarily bad! 
+It indicate observations that do not behave as we expect (model prediction). 
+
+### Computed variables
+
+Many models and many visualisations: put creation of variables in a function:
+
+```{r}
+compute_vars <- function(data) {
+  data %>% 
+    mutate(
+      term = term(date), 
+      wday = wday(date, label = TRUE)
+    )
+}
+```
+
+Another option is to put the transformations directly in the model formula:
+
+```{r}
+wday2 <- function(x) wday(x, label = TRUE)
+mod3 <- lm(n ~ wday2(date) * term(date), data = daily)
+```
+
+Both fine.
+
+
+### Time of year: an alternative approach
+
+Before: domain knowledge (US public holidays) to improve the model. 
+
+Alternative: Give the data more room to speak. More flexible model:
+
+```{r}
+library(splines)
+mod <- MASS::rlm(n ~ wday * ns(date, 5), data = daily)
+
+daily %>% 
+  data_grid(wday, date = seq_range(date, n = 13)) %>% 
+  add_predictions(mod) %>% 
+  ggplot(aes(date, pred, colour = wday)) + 
+    geom_line() +
+    geom_point()
+```
+
+Strong pattern in the numbers of Saturday flights.
+Good sign to get the same signal from different approaches.
+
+
+### Exercises
+
+R4DS Exercises p. 395-396 (online 24.3.5 Exercises): 1-3, 7-8.
+
+
+## Learning more about models
+
+Only scratched the absolute surface of modelling and how to use R in modelling process.
+
+R4DS:
+
+* *Statistical Modeling: A Fresh Approach* by Danny Kaplan,
+  <http://www.mosaic-web.org/go/StatisticalModeling/>. This book provides 
+  a gentle introduction to modelling, where you build your intuition,
+  mathematical tools, and R skills in parallel. The book replaces a traditional
+  "introduction to statistics" course, providing a curriculum that is up-to-date 
+  and relevant to data science.
+
+* *An Introduction to Statistical Learning* by Gareth James, Daniela Witten, 
+  Trevor Hastie, and Robert Tibshirani, <http://www-bcf.usc.edu/~gareth/ISL/> 
+  (available online for free). This book presents a family of modern modelling
+  techniques collectively known as statistical learning.  For an even deeper
+  understanding of the math behind the models, read the classic 
+  *Elements of Statistical Learning* by Trevor Hastie, Robert Tibshirani, and
+  Jerome Friedman, <http://statweb.stanford.edu/~tibs/ElemStatLearn/> (also
+  available online for free).
+
+* *Applied Predictive Modeling* by Max Kuhn and Kjell Johnson, 
+  <http://appliedpredictivemodeling.com>. This book is a companion to the 
+  __caret__ package and provides practical tools for dealing with real-life
+  predictive modelling challenges.
+

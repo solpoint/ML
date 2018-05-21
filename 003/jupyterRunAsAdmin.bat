@@ -1,0 +1,1 @@
+jupyter notebook C:\Udvikling\edu\BigData\003\

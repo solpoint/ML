@@ -1,0 +1,35 @@
+---
+title: "ExcelWriter"
+author: "Sospeter A. Oluoch"
+date: "5 jan 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(xlsx)
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r mtcars}
+summary(mtcars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r writer, echo=TRUE}
+#Write the excel file to be used.
+write.xlsx(mtcars, "mtcars.xlsx", sheetName = "cars", row.names = FALSE)
+
+#Compute the anova equation
+aov(mpg ~ cyl+disp+hp+drat+wt+qsec+vs+am+gear+carb, data=mtcars) %>% summary()
+
+
+#Compute correlation
+mtcars %>% cor()
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

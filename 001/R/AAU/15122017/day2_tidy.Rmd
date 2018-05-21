@@ -1,0 +1,138 @@
+---
+title: "Tidy Data (Chapter 9)"
+author: "Torben"
+date: "November 22, 2017"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+```
+
+# Tidy data
+
+The basic idea behind tidy data is that each row refer to an observation, each column a variable and the cells contains values.
+
+![Tidy data schema](tidy-1.png)
+
+Hence, of the four examples (from the book) below, only `table1` is obeying the tidy data principle
+
+```{r}
+table1
+table2
+table3
+bind_rows(list(cases = table4a, population = table4b), .id = "type")
+```
+
+# Spreading and Gathering
+
+Or "going from wide to long" and "going from wide to long" are two extremely important **reshaping** procedures.
+These are necessary for various tasks, e.g. plotting and regression modelling may require wider data (than provided by the tidy structure).
+
+The two functions `gather` and `spread` in `tidyr` makes this *quite* simple. 
+
+## Gather
+
+When using `gather` we need to provide the name of the variable (`key`) that will contain the "old" column names and the
+column that will hold the corresponding cell information (`value`). The remaining `...` argument tells `gather` which columns to
+gather. 
+
+```{r}
+table4a %>% 
+  gather(key = year, value = cases, `1999`:`2000`) ## note we don't need quotes, e.g. "year"
+```
+
+We can also make *negative* selection of the columns and convert the resulting columns (e.g. from character to numeric)
+```{r}
+table4a %>% 
+  gather(key = year, value = cases, -country, convert = TRUE)
+```
+
+## Spreading
+
+The opposite operation of `gather` is `spread`
+
+```{r}
+spread(table2, key = type, value = count)
+```
+
+# Separating, Uniting and Pulling 
+
+Occationally some variables -- in particular string variables -- contain several pieces of information that we 
+would like to separate/extract into individual columns. For this `separate` and `extract` are excellent.
+
+## Separating
+
+The `separate` function automatically identifies the non-numeric and non-letter characters as separator(s).
+
+```{r}
+table3 %>% 
+  separate(col = rate, into = c("cases", "population"), remove = FALSE)
+```
+
+It handles different/varying separators automatically
+```{r}
+table3 %>% mutate(rate = paste0(year,"_",rate)) %>% select(-year) %>% 
+  separate(col = rate, into = c("year","cases", "population"), remove = FALSE)
+```
+
+Using `extract` we need to do a bit more work ourselfs as this uses regular expressions.
+Hence, it can cope with more advanced cases, so is only needed if `separate` can't do the job.
+
+```{r}
+table3 %>% 
+  extract(rate, into = c("cases", "population"), regex = "([0-9]*)/([0-9]*)", convert = TRUE)
+```
+
+## Uniting
+
+Strangely enough -- `unite` does the opposite of `separate`
+
+```{r}
+table5 %>% 
+  unite(cn_yr, century, year, remove = FALSE) %>% 
+  unite(cnyr, century, year, sep = "")
+```
+
+## Pulling
+
+This was obviously a misprint in the book, and is actually referring to the operation of extracting a single 
+column from a tibble
+
+```{r}
+table5 %>% pull(country)
+```
+
+# Fill
+
+```{r}
+treatment <- tribble(
+  ~ person,           ~ treatment, ~response,
+  "Derrick Whitmore", 1,           7,
+  NA,                 2,           10,
+  NA,                 3,           9,
+  "Katherine Burke",  1,           4
+)
+
+treatment
+```
+
+How to "complete" the `NA`s in this data? Occationally people avoids repeating
+cells below if they are the same as the previous (above) value. `fill` can fix this.
+
+```{r}
+treatment %>% 
+  fill(person)
+```
+
+# Exercises
+
+Page 151: 2 and 3
+Page 156: 4
+Page 160: 1 and 2
+Page 163: 2

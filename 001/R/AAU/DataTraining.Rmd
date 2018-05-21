@@ -1,0 +1,37 @@
+---
+title: "DataTraining"
+author: "Sospeter A. Oluoch"
+date: "10 jan 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+## R Markdown
+This document is used to split data and train the model.
+
+```{r mtcars}
+data(mtcars)
+set.seed(1234)
+#No. of rows to be used in training
+trainSz <- floor(nrow(mtcars)*0.7)
+
+
+#No. of rows to be used in testing
+testSz <- floor(nrow(mtcars*0.3))
+
+index <- seq(1:nrow(mtcars))
+
+#train data set
+trainIndex <- sample(index, trainSz)
+index
+
+testIndex <- index[-trainSz]
+
+mtcars[trainIndex,]
+
+mtcars[test,]
+```

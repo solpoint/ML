@@ -1,0 +1,357 @@
+---
+title: | 
+  | Miniproject in Introduction to Data Science
+  | ITVEST Data Science and Big Data (DSBD)
+output:
+  html_document: 
+    number_sections: true
+  pdf_document: 
+    number_sections: true
+    dev: png
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, dpi = 300)
+```
+
+```{r, echo = TRUE}
+if(!require("corrplot"))
+  install.packages("corrplot")
+
+library(tidyverse)
+library(lubridate)
+library(pander) # for prettier tables
+library(scales) # for making prettier axes in plots
+library(stringr)
+library(factoextra)
+library(corrplot) 
+
+theme_set(theme_bw())
+
+panderOptions('big.mark', ',')
+```
+
+# Formalia
+
+Deadline for hand-in: Jan 3, 2018 at 23:55.
+
+Where: Moodle.
+
+What: Rmd file. Possibly also pdf (or html), but Rmd is mandatory.
+
+Groups: Maximum 3 participants, however the project must be handed in individually.
+
+# Exercises
+
+Here, we focus on the `airlines`, `airports`, `flights`, `planes`, and `weather`  datasets:
+
+```{r, echo = TRUE}
+library(nycflights13)
+
+airlines
+airports
+flights
+planes
+weather
+```
+
+Remember to read about the datasets.
+
+# Exercises
+
+
+## Exercise
+
+Construct a barplot displaying number of flights per month.
+
+```{r chunk1}
+flights %>% na.omit() %>% group_by(month) %>% count(month) %>% ggplot() + geom_bar(aes(month, n), stat="identity", color="blue") + labs(title="Flights per month", x="Month", y="Total flights") +
+  scale_x_continuous(breaks = c(1:12)) + scale_y_continuous(breaks=seq(0, 30000, by=5000))
+```
+
+Now, in the barplot (showing number of flights per month), make a separate bar for each origin.
+
+```{r chunk2}
+flights %>% na.omit() %>% group_by(month, origin) %>% summarize(count=n()) %>% ggplot() + geom_bar(aes(x=month, count, fill=origin), stat="identity", position="dodge") + labs(title="Flights per month", x="Month", y="Total flights") + scale_x_continuous(breaks=c(1:12)) + scale_y_continuous(breaks=seq(0, 12000, by=1000))
+```
+
+## Exercise
+
+What are the top-10 destinations and how many flights were made to these?
+
+```{r chunk3}
+flights %>% filter(!is.na(dest)) %>% group_by(dest) %>% summarize(NoOfFlights=n()) %>% arrange(desc(NoOfFlights)) %>% top_n(10) %>% pandoc.table(big.mark=",", justify = c('left', 'right')) 
+```
+
+For these 10 destinations, make a barplot illustrating the number of flights from origin to top-10 destination.
+
+```{r chunk4}
+flights %>% na.omit() %>% group_by(dest) %>% summarize(NoOfFlights=n()) %>% arrange(desc(NoOfFlights)) %>% top_n(10) %>%   ggplot() + 
+  geom_bar(aes(dest, NoOfFlights), stat="identity") + 
+  labs(title = "Flights to top 10 destinations", x="Destinations", y="No. of flights") +   scale_y_continuous(breaks=seq(0, 20000, by=2000))
+```
+
+Now, order the bars (destinations) according to the total number of flights to these destinations.
+
+```{r chunk5}
+flights %>% na.omit() %>% group_by(dest) %>% summarize(NoOfFlights=n()) %>% arrange(desc(NoOfFlights)) %>% top_n(10) %>% 
+  ggplot() + 
+  geom_bar(aes(factor(dest, levels = dest[order(-NoOfFlights)]), NoOfFlights), color="blue", stat="identity") + 
+  labs(title = "Flights to top 10 destinations", x="Destinations", y="No. of flights") + scale_y_continuous(breaks=seq(0, 20000, by=2000))
+
+```
+## Exercise
+
+Is the mean air time from each of the three origins different? Further, are these differences statistically significant?
+
+```{r chunk6, echo=TRUE}
+#H0 : There is no difference between the population mean and the sample mean for the individual origins.
+#H0 :  ??1 = ??2 = ??3 
+
+#Remove flights without NA air times
+flightsWithAirTime <- flights %>% filter(!is.na(air_time)) %>% select(air_time, origin)
+
+
+#Visualize the sample mean air time grouped by origin
+flightsWithAirTime %>% group_by(origin) %>%  summarize(MeanAirTime =mean(air_time)) %>% pandoc.table(big.mark=",", justify = c('left', 'right'))
+
+#Visualizing by plotting
+flightsWithAirTime %>% select(origin, air_time) %>% ggplot() + geom_boxplot(aes(origin, air_time, color=origin)) + scale_y_continuous(name="Air time", breaks=seq(0, 800, 100), limits=c(0,800)) + ggtitle("Mean air times for origins")
+
+#Conduct an ANOVA test at 5% significance
+flightsWithAirTime %>% aov(air_time ~ origin, data = .) %>% summary()
+
+#Conclusion: P-Value
+# In the results, the null hypothesis states that there is no difference between the population mean and the sample mean for the individual origins(??1 = ??2 = ??3 ). Since the p-value is less than the 5% significance level,we reject the hypothesis. At least one of them is different.
+
+```
+
+
+## Exercise
+
+How many weather observations are there for each origin?
+
+```{r chunk7, echo=TRUE}
+weather %>% na.omit() %>% group_by(origin) %>% summarize(Total=n()) %>% pandoc.table(big.mark=",", justify = c('left', 'right'))
+```
+
+Convert temperature to degrees Celsius. This will be used in the reminder of this miniproject.
+(We do this for both `temp` and `dewp` using `mutate_at`)
+
+```{r chunk8, echo=TRUE}
+FahrenheitToDegrees <- function(temp)
+{
+  (temp-32)*5/9
+}
+weatherCleaned <- weather %>% filter(!is.na(temp), !is.na(dewp)) %>% mutate_at(vars(temp, dewp), funs(FahrenheitToDegrees))
+
+```
+
+Construct a graph displaying the temperature at `JFK`.
+
+```{r chunk9, echo=TRUE}
+jfkTemp <- weatherCleaned %>% filter(origin=='JFK') %>% mutate(date=make_date(year, month, day)) %>%  group_by(date) %>% summarize(deg=mean(temp))
+
+plotJFKTemp <- function()
+{
+  ggplot(jfkTemp) + geom_point(aes(date, deg), color="blue") + labs(title="Temperature at JFK", x="Months", y="Temp.(°C)") + scale_y_continuous(breaks=seq(-20, 35, by=5))
+}
+plotJFKTemp()
+
+```
+
+Add a red line showing the mean temperature for each day.
+
+```{r chunk10, echo=TRUE} 
+ggplot(jfkTemp) + geom_point(aes(date, deg), color="blue") + 
+    geom_smooth(aes(date, deg, color=origin), color="red", se=F) + labs(title="Temperature at JFK", x="Months", y="Temp.°C") + scale_y_continuous(breaks=seq(-20, 50, by=5))
+```
+
+Now, visualize the daily mean temperature for each origin airport.
+
+```{r chunk11, echo=TRUE}
+#Get the daily mean temp
+#Start by adding a date column of date type using lubridate's make_date function.
+dailyMeanTempByOrigin <- weatherCleaned %>% mutate(date=make_date(year, month, day)) %>% group_by(origin, date) %>% summarize(MeanTemp = mean(temp))
+
+#Plot each day's graph for each origin against the mean temperature
+dailyMeanTempByOrigin %>% na.omit() %>% ggplot() + geom_smooth(aes(date, MeanTemp, color=origin), se=F) + labs(title = "Daily mean temp. for each origin airport", x="Day", y="Mean temp. ºC") + scale_y_continuous(breaks=seq(-20, 35, by=5))
+```
+
+## Exercise
+
+Investigate if arrival delay is associated with the flight distance (and also departure delay).
+
+```{r chunk12, echo=TRUE} 
+flightsCleaned <- flights %>% filter(!is.na(arr_delay), !is.na(dep_delay), !is.na(distance))
+
+#Visualize on a scatter plot
+plot(flightsCleaned$distance, flightsCleaned$arr_delay, main="Arr delay vs Distance")
+
+cor.test(flightsCleaned$arr_delay, flightsCleaned$distance, method="pearson")
+#There is a fairly very weak negative relationship between arr_val and distance as attributed by the corr. coeffecient, r, -0.06186 and p value of <2.2e-16. This confirms the appearance of the scatter plot.
+
+#Visualize on a scatter plot
+plot(flightsCleaned$distance, flightsCleaned$arr_delay + flightsCleaned$dep_delay, main="Arr delay vs Distance")
+
+cor.test(flightsCleaned$arr_delay + flightsCleaned$dep_delay, flightsCleaned$distance, method="pearson")
+#Again, the relationship between the delays and the distance is weak, with a corre. coeffecient of -0.04.   
+
+```
+## Exercise
+
+Investigate if departure delay is associated with weather conditions at the origin airport. This includes descriptives (mean departure delay), plotting, regression modelling, considering missing values etc.
+
+```{r chunk13, echo=TRUE}
+weatherCleaned <- mutate_at(weather, vars(temp, dewp), funs(FahrenheitToDegrees)) %>% mutate(date=make_date(year, month, day)) %>% mutate(date=make_date(year, month, day))
+
+flightDelay <- flights %>%  select(year:day, origin, hour, arr_delay, dep_delay, tailnum) %>% mutate(date=make_date(year, month, day))
+
+flightsAndWeather <-  inner_join(flightDelay, weatherCleaned, by = c("origin", "date")) %>% na.omit() %>% select(dep_delay, humid,precip, visib, wind_dir, wind_speed, temp, dewp)
+
+#Visualize the relations
+flightsAndWeather %>% cor() %>% corrplot(method="number")
+
+#There is a weak positive relationship between dep_delay and humid, precip, temp, dewp
+#There is also a weak negative relationship between dep_delay and visib, wind_dir
+
+set.seed(310)
+DelaySample <- caTools::sample.split(flightsAndWeather$dep_delay, SplitRatio = 0.7)
+train <- subset(flightsAndWeather, DelaySample == T)
+
+#Test set
+test <- subset(flightsAndWeather, DelaySample == F)
+
+#Model dep delay to the rest of the columns from the training data set
+model <- lm(dep_delay ~ ., data = train)
+summary(model)
+
+#There is no relationship between the weather conditions and the departure delay.
+res <- residuals(model) %>% as.data.frame()
+
+res %>% ggplot(aes(res)) +  geom_histogram(fill='blue',alpha=0.5, bins = 20)
+
+#Prediction computation
+
+delayPredict <- predict(model, test)
+predictRes  <- cbind(delayPredict, test$dep_delay) %>% as.data.frame()
+colnames(predictRes) <- c("predict", "actual")
+
+#Uncomment for output
+#predictRes
+
+```
+## Exercise
+Is the age of the plane associated to delay?
+
+```{r chunk14, echo=TRUE}
+
+flightsByYear <- flights %>% filter(!is.na(tailnum))
+planesAgeDelayRelation <- planes %>% filter(!is.na(year)) %>% inner_join(flightsByYear, "tailnum") %>% filter(!is.na(dep_delay), !is.na(arr_delay)) %>% group_by( year.x) %>% summarize(MeanDelay=mean(dep_delay)) 
+
+#Visualize the relationship between the age and the delay on a scatter plot
+scatter.smooth(planesAgeDelayRelation$year.x, planesAgeDelayRelation$MeanDelay, col="red", main="Delay compared to plane's age", xlab="Year", ylab="Delayed period")
+
+cor.test(planesAgeDelayRelation$MeanDelay, planesAgeDelayRelation$year.x, method="pearson")
+
+#There is a fairly moderate relationship between the age of the plane and the delay as given by r, 0.45
+
+```
+
+## Exercise
+
+It seems like the plane manufacturer could use a cleaning. After that, how many manufacturers have more than 200 planes? And how many flights are each manufacturer with more than 200 planes responsible for?
+
+```{r chunk15, echo=TRUE}
+#Manufacturers with more than 200 planes -- After cleaning.
+manufPlanes200 <- planes %>% filter(!is.na(manufacturer)) %>% group_by(manufacturer) %>% summarize(NoOfPlanes=n()) %>% filter(NoOfPlanes > 200) 
+
+#Make pretty table
+manufPlanes200 %>% pandoc.table(justify=c('left', 'right'))
+
+#No of flights for manufacturers having more than 200 planes of which they are responsible thereof
+planes %>% inner_join(flights, "tailnum") %>% filter(manufacturer %in% manufPlanes200$manufacturer) %>% group_by(manufacturer) %>% summarize(NoOfFlights=n()) %>% pandoc.table(justify=c('left', 'right'))
+
+```
+
+
+## Exercise
+
+It turns out that Airbus has several main models, e.g. several A320 (A320-211, A320-212 etc.) and so on. Create a frequency table of the main models for Airbus and how many planes there are in each.
+
+```{r chunk16, echo=TRUE}
+planes %>% filter(manufacturer=='AIRBUS') %>% filter(!is.na(model)) %>% group_by(model) %>% summarize(NoOfPlanes=n()) %>% arrange(NoOfPlanes) %>% pandoc.table(justify=c('left', 'right'))
+
+```
+
+
+## Exercise
+
+Are larger planes (measured by number of seats) more or less delayed than smaller planes?
+
+```{r chunk17, echo=TRUE}
+flightsDelay <- flights %>% filter(!is.na(arr_delay), !is.na(dep_delay)) %>% mutate(totalDelay=arr_delay+dep_delay)
+planesDelayBySize <- planes %>% filter(!is.na(manufacturer), !is.na(seats)) %>%  inner_join(flightsDelay, "tailnum")
+planesDelayBySize <- planesDelayBySize %>% group_by(seats) %>% summarize(AvgDelay=mean(totalDelay)) 
+
+
+#Visualization of the relationship between the delays and the size of the planes
+scatter.smooth(planesDelayBySize$seats, planesDelayBySize$AvgDelay, col="red", main="Planes delay by no. of seats", xlab="No. of setas", ylab="Avg. delay (min)")
+
+cor.test(planesDelayBySize$seats, planesDelayBySize$AvgDelay)
+#There is a very weak linear relationship between the size of plane (No. of seats) and the delay as given by r {0.345} and a p-value of 0.016
+#A single plane with higher number of seats ( >450) was delayed by more than 250 minutes. This affects the results, to make it appear as though there is a moderate relationship though. 
+
+```
+
+
+## Exercise
+
+On a map (`map_data("usa")`), plot the airports that has flights to them.
+
+```{r chunk18, echo=TRUE}
+usa <- map_data("usa") 
+airportsWithFlights <- airports %>% na.omit() %>% inner_join(flights, c("faa"= "dest")) %>% group_by(faa, lat, lon) %>% summarize(NoOfFlights=n())
+
+ggplot() + 
+  geom_polygon(data = usa, aes(long, lat, group = group), fill = "grey") + 
+  geom_point(data = airportsWithFlights , aes(lon, lat), color="red") + 
+  labs(title="Airports that have flights") + 
+  coord_quickmap()
+#101 airports have flights to them. I.e they have dest.
+```
+
+Make a similar plot, but now points must have size relative to the number of flights each airport is destination for. 
+
+```{r chunk19, echo=TRUE}
+ggplot() + 
+  geom_polygon(data = usa, aes(long, lat, group = group), fill = "grey") + 
+  geom_point(data = airportsWithFlights , aes(lon, lat, size=NoOfFlights), colour="blue", position="jitter") + 
+  labs(title="Airports that have flights") + 
+  coord_quickmap()
+```
+
+## Exercise
+
+Do a principal component analysis of the weather at JFK using the following columns: `temp, dewp, humid, wind_dir, wind_speed, precip, visib` (only on `complete.cases()`). How many principal components should be used to capture the variability in the weather data? 
+
+```{r chunk20, echo=TRUE}
+#Get only the complete cases at JFK and then run the prcomp function
+jfkweather.pca <- weather %>% filter(origin=='JFK') %>% select(temp, dewp, humid, wind_dir, wind_speed, precip, visib) %>% na.omit() %>% prcomp(scale=T)
+
+#View the proportion of the total variance explained by each component
+summary(jfkweather.pca)
+
+#Visualize eigenvalues (scree plot). Show the percentage of variances explained by each principal component.
+fviz_eig(jfkweather.pca)
+
+#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
+fviz_pca_var(jfkweather.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+#Conclusion
+#From the summary results, we can see that the amount of cumulative variation needed for at least 95% confidence interval is achieved by 5 components. I.e PC5 has a cumulative proportion of 0.94. This can also be visualized in the scree plot where the variation explained drops gradually from the first component through to the fifth. 
+```
+

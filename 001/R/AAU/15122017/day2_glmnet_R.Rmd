@@ -1,0 +1,107 @@
+---
+title: "`glmnet` in R"
+author: "Torben"
+date: "November 24, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA, fig.width = 10)
+```
+
+Load `glmnet` to make the functionalities available.
+```{r, echo=FALSE}
+## install.packages("glmnet") ## Most recent CRAN version: 2.0-10
+library(glmnetUtils) ## loads library(glmnet)
+library(tidyverse)
+library(plotmo) # for plot_glmnet # install.packages("plotmo")
+library(ggfortify) # for enhancement of ggplot # install.packages("plotmo")
+theme_set(theme_bw(base_size = 20))
+```
+
+Ressources on `glmnet`
+
+* The package vignette `vignette("glmnet_beta")` is highly recommendable. 
+* Many questions have already been asked _and_ answered at https://stackoverflow.com/questions/tagged/glmnet.
+
+## Example
+
+```{r}
+crime <- read_csv("crime.csv", col_types = cols(
+  funding = col_integer(),
+  hs = col_integer(),
+  `not-hs` = col_integer(),
+  college = col_integer(),
+  college4 = col_integer(),
+  `crime rate` = col_integer()
+)) %>% rename(rate = `crime rate`)
+```
+
+Note: Due to different scales of the variables, the estimated parameters may be different in size simply due to
+different units. Hence, The `glmnet` function automatically standardises both the response 
+(for `family = "gaussian"`) `y` and the covariates `x`.
+
+```{r}
+crime_lasso <- glmnet(rate ~ .,
+                      data = crime,
+                      alpha = 1) ## alpha = 1: LASSO
+
+plot(crime_lasso)
+```
+
+```{r}
+plot_glmnet(crime_lasso, xvar = "norm")
+```
+
+```{r}
+autoplot(crime_lasso)
+```
+
+
+```{r}
+crime_ridge <- glmnet(rate ~ .,
+                      data = crime,
+                      alpha = 0) ## alpha = 0: Ridge Regression
+plot(crime_ridge)
+plot_glmnet(crime_ridge, xvar = "norm")
+```
+
+# What should $\lambda$ be?
+
+```{r}
+cv_glmnet_lasso <- cv.glmnet(y = crime_rate, x = crime_matr, alpha = 1)
+plot(cv_glmnet_lasso)
+```
+
+
+```{r}
+cv_glmnet_ridge <- cv.glmnet(y = crime_rate, x = crime_matr, alpha = 0) ## alpha = 0: Ridge
+plot(cv_glmnet_ridge)
+
+```
+
+# Elastic net approach: What should $\alpha$ be?
+
+```{r}
+cv_glmnet_alpha <- cva.glmnet(rate ~ ., data = crime)
+alphas <- cv_glmnet_alpha$alpha
+plot(cv_glmnet_alpha, col = 1:11)
+legend("topleft", bty = "n",
+       lty = 1,
+       col =  topo.colors(length(alphas)), 
+       title = expression(alpha),
+       legend = alphas)
+```
+
+# Other types of regression
+
+There are many different types of regressions one would be interested in:
+
+* Logistic regression (binary outcomes): `family = "binomial"`
+* Count regression (Poisson distribution): `family = "poisson"`
+* Multiclass (multinomial data): `family = "multinomial"`
+* Survival analysis (Cox proportional hazard model): `family = "cox"`
+* Multivariate normal (multivariate Gaussian): `family = "mgaussian"`
+
+
+

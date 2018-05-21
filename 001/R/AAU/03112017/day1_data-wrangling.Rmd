@@ -1,0 +1,240 @@
+---
+title: "Data wrangling"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+
+# Data wrangling
+
+Resources:
+
+* <https://cran.rstudio.com/web/packages/dplyr/>
+    * <https://cran.rstudio.com/web/packages/dplyr/vignettes/introduction.html>
+* <http://r4ds.had.co.nz/transform.html>
+
+Dataframes vs tibbles:
+```{r, eval = FALSE}
+mtcars
+as_tibble(mtcars)
+```
+
+
+## The pipe operator, `%>%`
+
+```{r}
+filter(mpg, hwy >= 20, hwy <= 26)
+```
+
+```{r}
+select(filter(mpg, hwy >= 20, hwy <= 26), manufacturer, hwy)
+```
+
+* Each data handling operation performed results in one more level of nested calls. 
+* The code will quickly become difficult to read
+    * Read it from the inner most call and out 
+    * Operation description (function name) separated from arguments
+
+The pipe operator. 
+
+A crucial design decision of the `tidyverse`:
+
+* First argument is a `tibble` (or `data.frame`)
+* Subsequent arguments say what to do with the `tibble` (or `data.frame`)
+* Always return a `tibble` (or `data.frame`)
+
+This enables the so-called piping operator, `%>%`. Example:
+
+# f(x, ...) === x %>% f(...)
+
+```{r}
+sum(sqrt(1:10))
+1:10 %>% sqrt() %>% sum()
+```
+
+```{r}
+filter(mpg, hwy >= 20, hwy <= 26) %>% 
+  select(manufacturer, hwy)
+
+mpg %>% 
+  filter(hwy >= 20, hwy <= 26) %>% 
+  select(manufacturer, hwy)
+```
+
+## Operations
+
+* `filter()`: keep rows matching criteria
+* `select()`: pick/reorder columns by name
+* `rename()`: rename columns by name
+* `arrange()`: reorder rows
+* `mutate()`: add new or modify existing variables
+* `summarise()`: perform aggregation operations
+* `group_by()`: introduce aggregation groupings
+* `count()`: a short-hand for `group_by()` and `summarise()`
+
+A ton of helper functions.
+
+## Examples
+
+```{r}
+mpg %>% select(manufacturer, hwy)
+```
+
+```{r}
+mpg %>% select(class, everything())
+```
+
+
+```{r}
+ggplot(mpg, aes(x = class)) + 
+  geom_bar()
+
+count(mpg, class)
+mpg %>% count(class)
+mpg %>% group_by(class) %>% summarise(n = n())
+
+mpg %>% 
+  group_by(class) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n))
+
+ggplot(mpg %>% count(class), aes(class, n)) +
+  geom_col() # like geom_bar, but with height known
+```
+
+
+```{r}
+mpg %>% 
+  group_by(manufacturer) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  arrange(desc(mean_hwy))
+
+mpg %>% 
+  group_by(cyl, trans) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  arrange(cyl, desc(mean_hwy))
+```
+
+```{r}
+ggplot(mpg, aes(displ, hwy, color = class)) +
+  geom_point()
+ggplot(mpg, aes(displ, hwy, color = class)) +
+  geom_count()
+
+mpg %>% 
+  group_by(class, displ) %>% 
+  summarise(mean_hwy = mean(hwy))
+
+mpg %>% 
+  group_by(class, displ) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  ggplot(aes(displ, mean_hwy, color = class)) +
+    geom_point()
+
+d_tmp <- mpg %>% 
+  group_by(class, displ) %>% 
+  summarise(mean_hwy = mean(hwy))
+
+ggplot(d_tmp, aes(displ, mean_hwy, color = class)) +
+  geom_point()
+```
+
+
+## Line plots
+
+```{r}
+ggplot(d_tmp, aes(displ, mean_hwy, color = class)) +
+  geom_point() +
+  geom_line()
+```
+
+
+
+## Output
+
+```{r}
+mpg %>% 
+  group_by(class) %>% 
+  summarise(mean_hwy = mean(hwy))
+```
+
+```{r}
+mpg %>% 
+  group_by(class) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  pander::pander()
+```
+
+```{r}
+library(pander)
+
+mpg %>% 
+  group_by(class) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  pander(digits = 3)
+
+mpg %>% 
+  group_by(class) %>% 
+  summarise(mean_hwy = mean(hwy)) %>% 
+  pander(digits = 3)
+```
+
+
+
+
+# Databases
+
+https://db.rstudio.com/dplyr/
+
+```{r}
+pass = ""
+#pass = .rs.askForPassword("")
+my_db <- src_postgres(host = 'localhost', 
+                      dbname = 'nycflights13', 
+                      user = 'tior', 
+                      password = pass)
+src_tbls(my_db)
+
+tbl(my_db, sql("SELECT * FROM flights"))
+tbl(my_db, sql("SELECT COUNT(*) FROM flights"))
+tbl(my_db, sql("SELECT origin, COUNT(*) FROM flights GROUP BY origin"))
+
+flights <- tbl(my_db, "flights")
+flights
+
+airports <- tbl(my_db, "airports")
+airports
+
+collect(airports)
+
+f1 <- tbl(my_db, sql("SELECT * FROM flights"))
+explain(f1)
+
+f1 <- flights %>% 
+  group_by(origin) %>% 
+  summarise(n = n())
+f1
+explain(f1)
+collect(f1)
+
+
+d <- flights %>% 
+  mutate(dep_hour = floor(dep_time/100)*100) %>% 
+  count(dep_hour) %>% 
+  arrange(dep_hour)
+d
+d %>% explain()
+d %>% collect()
+
+ggplot(d %>% collect(), aes(dep_hour, n)) +
+  geom_col()
+```

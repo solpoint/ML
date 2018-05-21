@@ -1,0 +1,6 @@
+batting = LOAD 'Batting.csv' using PigStorage(',');
+runs = FOREACH batting GENERATE $1 AS year, (int)$8 AS runs;
+grp_year = GROUP runs BY (year);
+result = FOREACH grp_year GENERATE group AS grpyear, SUM(runs.runs) AS totalruns;
+
+DUMP result;
